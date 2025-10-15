@@ -12,6 +12,7 @@ Gli step includono:
 4. Normalizzazione dell'intensità dell'immagine (0-100)
 5. Registrazione al template (MNI152 - ICBM 2009b Nonlinear Asymmetric) con ANTs.
 6. Salvataggio dei file in cartella derivatives BIDS-compliant.
+7. Salvataggio JSON report con tutti gli step e versioni software
 
 Autore: Alice Giubergia
 Data: 2025-03-17
@@ -26,6 +27,7 @@ import subprocess
 from datetime import datetime
 import shutil
 import myutils
+import argparse
 
 # Log globale degli step per il JSON finale
 PROCESSING_LOG = []
@@ -118,8 +120,6 @@ def normalize_intensity(input_image_path, mask_image_path, output_image_path):
     """
     data, affine, header = load_nifti(input_image_path)
     mask, _, _ = load_nifti(mask_image_path)
-    min_val = np.mean(data)
-    max_val = np.max(data)
     mask = mask.astype(bool)
     mean_val = np.mean(data[mask])
     normalized_data = data / mean_val * 100
@@ -172,18 +172,22 @@ def normalize_to_mni(moving_path, fixed_path, output_dir, sub_id, transform_type
         fixed_img = ants.image_read(fixed_path)
         myutils.log_message(f"--- Starting {transform_type} registration to MNI ---")
 
-        registration = ants.registration(fixed=fixed_img, 
+        tx = ants.registration(fixed=fixed_img, 
                                          moving=moving_img, 
                                          type_of_transform=transform_type, 
                                          outprefix=prefix,
                                          verbose=True)
 
-        warped_img = registration['warpedmovout']
+        warped_img = tx['warpedmovout']
         ants.image_write(warped_img, warped_output)
 
         # Salva i file di trasformazione
-        ants.write_transform
+        ants.write_transform(tx['fwdtransforms'][0], f"{prefix}0GenericAffine.mat")
+        if transform_type == 'SyN':
+            ants.write_transform(tx['fwdtransforms'][1], f"{prefix}1Warp.nii.gz")
+            ants.write_transform(tx['invtransforms'][0], f"{prefix}1InverseWarp.nii.gz")
 
+        
         myutils.log_message(f"Registrazione completata ({transform_type})")
         myutils.log_message(f"  Warped: {warped_output}")
     else:
@@ -195,18 +199,25 @@ def normalize_to_mni(moving_path, fixed_path, output_dir, sub_id, transform_type
 # Main script
 if __name__ == "__main__":
     
+    parser = argparse.ArgumentParser(description="T1 preprocessing pipeline")
+    parser.add_argument("--input", required=True, help="Path al file T1w.nii.gz NIfTI di input")
+    parser.add_argument("--sub", required=True, help="Subject ID (es. '01')")
+    parser.add_argument("--template_dir", default="../templates", help="Path template MNI (default: ../templates)")
+    parser.add_argument("--output_dir", default="../derivatives/mypipeline", help="Output folder (default: derivatives/mypipeline/sub-XX/anat)")
+    args = parser.parse_args()
+    
     # Step 0: Set filenames
-    TEMPLATE_DIR="../templates"
-    TEMPLATE_MNI_HR = f"{TEMPLATE_DIR}/mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz"
-    INPUT_NIFTI = "../nifti/sub-01/anat/sub-00_T1w.nii.gz"
-    sub_id = os.path.basename(os.path.dirname(INPUT_NIFTI)).split("-")[1]
+    TEMPLATE_DIR=args.template_dir
+    TEMPLATE_MNI_HR = "{TEMPLATE_DIR}/mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz".format(TEMPLATE_DIR=TEMPLATE_DIR)
+    sub_id = args.sub
+    INPUT_NIFTI = args.input
 
     # Cartella BIDS-compliant per i risultati
-    OUTPUT_DIR = os.path.join("derivatives", "mypipeline", f"sub-{sub_id}", "anat")
+    OUTPUT_DIR = os.path.join(args.output_dir, f"sub-{sub_id}", "anat")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Log
-    LOG_FILE = os.path.join(OUTPUT_DIR, "anat_preprocessing.log")
+    LOG_FILE = os.path.join(OUTPUT_DIR, "preprocess_t1.log")
     myutils.set_log_file(LOG_FILE)
 
     #INPUT_DIR = os.path.dirname(os.path.abspath(INPUT_NIFTI))
@@ -282,7 +293,7 @@ if __name__ == "__main__":
     myutils.log_message("=== Preprocessing completato con successo! ===")
 
     # === SAVE FINAL JSON REPORT ===
-    json_output = os.path.join(OUTPUT_DIR, f"sub-01_T1w_preproc.json")
+    json_output = os.path.join(OUTPUT_DIR, "sub-{sub_id}_preprocess_t1.json".format(sub_id=sub_id))
 
     final_report = {
         "PipelineDescription": {
