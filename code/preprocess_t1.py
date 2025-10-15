@@ -165,7 +165,7 @@ def normalize_to_mni(moving_path, fixed_path, output_dir, sub_id, transform_type
         f"sub-{sub_id}_space-MNI_desc-{desc}_T1w.nii.gz"
     )
 
-    prefix = os.path.join(output_dir, f"sub-{sub_id}_from-T1w_to-MNI_xfm0{transform_type}")
+    prefix = os.path.join(output_dir, f"sub-{sub_id}_from-T1w_to-MNI_{transform_type}")
 
     if not os.path.isfile(warped_output):
         moving_img = ants.image_read(moving_path)
@@ -180,14 +180,7 @@ def normalize_to_mni(moving_path, fixed_path, output_dir, sub_id, transform_type
 
         warped_img = tx['warpedmovout']
         ants.image_write(warped_img, warped_output)
-
-        # Salva i file di trasformazione
-        ants.write_transform(tx['fwdtransforms'][0], f"{prefix}0GenericAffine.mat")
-        if transform_type == 'SyN':
-            ants.write_transform(tx['fwdtransforms'][1], f"{prefix}1Warp.nii.gz")
-            ants.write_transform(tx['invtransforms'][0], f"{prefix}1InverseWarp.nii.gz")
-
-        
+     
         myutils.log_message(f"Registrazione completata ({transform_type})")
         myutils.log_message(f"  Warped: {warped_output}")
     else:
@@ -246,7 +239,7 @@ if __name__ == "__main__":
     bids_mask_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-brain_mask.nii.gz")
     shutil.copy(mask_file, bids_mask_file)
 
-    log_step("Brain Extraction", CURRENT_FILE, bids_mask_file, {"Method": "ANTs", "Template": "MNI152NLin2009bAsym"})
+    log_step("Brain Extraction", CURRENT_FILE, bids_mask_file, {"Method": "ANTs", "Template": "MNI152_NLin_2009a_Asym"})
 
     # Step 2: Normalizzazione intensità 0-100
     myutils.log_message("--------------------- Step 2")
@@ -288,7 +281,7 @@ if __name__ == "__main__":
 
     template_file = os.path.join(TEMPLATE_DIR, "mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz")
     mni_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-preproc_T1w.nii.gz")
-    normalized_mni = normalize_to_mni(normalized, TEMPLATE_MNI_HR, mni_file, sub_id, transform_type='SyN')
+    normalized_mni = normalize_to_mni(normalized, TEMPLATE_MNI_HR, OUTPUT_DIR, sub_id, transform_type='SyN')
     log_step("MNI Registration", normalized, normalized_mni, {"TransformType": "SyN"})
     myutils.log_message("=== Preprocessing completato con successo! ===")
 
@@ -306,9 +299,10 @@ if __name__ == "__main__":
             "NiBabel": nib.__version__,
             "NumPy": np.__version__
         },
+        "SubjectID": sub_id,
         "Input": os.path.basename(INPUT_NIFTI),
         "OutputDirectory": OUTPUT_DIR,
-        "Template": "MNI152NLin2009bAsym",
+        "Template": "MNI152_NLin_2009b_Asym_hires",
         "ProcessingSteps": PROCESSING_LOG
     }
 
