@@ -54,16 +54,6 @@ def save_nifti(data, affine, header, output_path):
     img = nib.Nifti1Image(data, affine, header)
     nib.save(img, output_path)
 
-def save_bids_json(nifti_path, metadata_dict):
-    """
-    Salva un file JSON con i metadati BIDS associati al file NIfTI.
-    """
-    json_path = nifti_path.replace('.nii.gz', '.json').replace('.nii', '.json')
-    with open(json_path, 'w', encoding='utf-8') as json_file:
-        json.dump(metadata_dict, json_file, indent=4)
-    myutils.log_message(f"Metadata JSON salvato: {json_path}")
-
-
 def brain_extraction(input_image_path, input_mask_path, output_brain_path):
     """
     Maschera la input image.
@@ -218,10 +208,12 @@ if __name__ == "__main__":
 
     ORIG_FILE = f"{OUTPUT_DIR}/sub-{sub_id}_orig_T1w.nii.gz"
     shutil.copy(INPUT_NIFTI, ORIG_FILE)
-  
+    print(f"[sub-{sub_id}] Copying T1 image for backup ...")
+
     myutils.log_message("=== Inizio Preprocessing ===")
 
     # Step 0: move to MNI space
+    print(f"[sub-{sub_id}] Moving to MNI space...")
     myutils.log_message("--------------------- Step 0")
     myutils.log_message("Moving to MNI space")
     CURRENT_FILE = normalize_to_mni(moving_path=INPUT_NIFTI, 
@@ -232,6 +224,7 @@ if __name__ == "__main__":
     log_step("Move to MNI space", INPUT_NIFTI, CURRENT_FILE, {"TransformType": "Rigid"})
 
     # Step 1: Running Brain Extraction ANTs
+    print(f"[sub-{sub_id}] Brain Extraction ANTs...")
     myutils.log_message("--------------------- Step 1")
     myutils.log_message("Brain Extraction ANTs")
     mask_prefix = os.path.join(OUTPUT_DIR, "sub-{sub}_desc-brain_".format(sub=sub_id))
@@ -249,6 +242,8 @@ if __name__ == "__main__":
     log_step("Intensity Normalization", CURRENT_FILE, preproc_file, {"Range": "0-100"})
 
     # Step 3: Bias Field Correction
+    print(f"[sub-{sub_id}] N4 Bias Field Correction...")
+
     myutils.log_message("--------------------- Step 3")
     myutils.log_message("N4 Bias Field Correction")
     n4_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-N4_T1w.nii.gz")
@@ -268,6 +263,8 @@ if __name__ == "__main__":
     OUTPUT_BASENAME = f"{OUTPUT_BASENAME}"
     '''
     # Step 4: Brain masking
+    print(f"[sub-{sub_id}] Brain masking...")
+
     myutils.log_message("--------------------- Step 4")
     myutils.log_message("Brain masking")
     brain_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-brain_T1w.nii.gz")
@@ -276,6 +273,8 @@ if __name__ == "__main__":
     log_step("Brain Masking", normalized, brain_file, {"Method": "Masking with ANTs Mask"})
 
     # Step 5: Registrazione all'MNI
+    print(f"[sub-{sub_id}] Registering T1 to MNI...")
+
     myutils.log_message("--------------------- Step 5")
     myutils.log_message("MNI registration")
 
@@ -283,6 +282,8 @@ if __name__ == "__main__":
     mni_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-preproc_T1w.nii.gz")
     normalized_mni = normalize_to_mni(normalized, TEMPLATE_MNI_HR, OUTPUT_DIR, sub_id, transform_type='SyN')
     log_step("MNI Registration", normalized, normalized_mni, {"TransformType": "SyN"})
+    print(f"[sub-{sub_id}] ✅ T1 preprocessing completed.")
+
     myutils.log_message("=== Preprocessing completato con successo! ===")
 
     # === SAVE FINAL JSON REPORT ===

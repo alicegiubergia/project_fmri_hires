@@ -70,7 +70,7 @@ def preprocess_t2(sub_id, t2_file, t1_file, t1_brainmask, output_dir):
     with open(json_output, "w") as f:
         json.dump(final_report, f, indent=4)
 
-    print(f"[{sub_id}] ✅ T2 preprocessing completed.")
+    print(f"[sub-{sub_id}] ✅ T2 preprocessing completed.")
 
 
 if __name__ == "__main__":
