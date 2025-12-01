@@ -23,6 +23,7 @@ import json
 import nibabel as nib
 import numpy as np
 import ants
+import antspynet
 import subprocess
 from datetime import datetime
 import shutil
@@ -54,7 +55,7 @@ def save_nifti(data, affine, header, output_path):
     img = nib.Nifti1Image(data, affine, header)
     nib.save(img, output_path)
 
-def brain_extraction(input_image_path, input_mask_path, output_brain_path):
+def apply_brain_mask(input_image_path, input_mask_path, output_brain_path):
     """
     Maschera la input image.
     """
@@ -65,22 +66,13 @@ def brain_extraction(input_image_path, input_mask_path, output_brain_path):
         save_nifti(new_data, affine, header, output_brain_path)
     myutils.log_message(f"output: {output_brain_path}")
 
-# Funzione per mask computation con ANTs
-def mask_computation_ants(input_image_path, output_brain_mask_path):
+def run_ants_brain_extraction(t1_path, output_prefix, template_dir):
     """
-    Esegue la brain extraction utilizzando ANTs.
-    - Usa il template MNI per migliorare l'estrazione.
-    """
-    input_img = ants.image_read(input_image_path)
-
-    mask = ants.get_mask(input_img, cleanup=4)
-
-    # Salva il risultato
-    ants.image_write(mask, output_brain_mask_path)
-    myutils.log_message(f"ANTs Mask Computation terminato: {input_image_path} -> {output_brain_mask_path}")
-    return output_brain_mask_path
-
-def brain_extraction_ants(t1_path, output_prefix, template_dir):
+    Esegue brain extraction con ANTs:
+      1. antsBrainExtraction.sh (standard)
+      2. antspynet brain extraction (FreeSurfer-flavored e Combined)
+    """ 
+    # --- Step 1: ANTs BrainExtraction.sh ---
     template_mask = f"{template_dir}/mni_icbm152_nlin_asym_09a/mni_icbm152_t1_tal_nlin_asym_09a_mask.nii"
     template = f"{template_dir}/mni_icbm152_nlin_asym_09a/mni_icbm152_t1_tal_nlin_asym_09a.nii"
     command = f"antsBrainExtraction.sh -d 3 -a {t1_path} -m {template_mask} -e {template} -o {output_prefix}"
@@ -88,8 +80,35 @@ def brain_extraction_ants(t1_path, output_prefix, template_dir):
 
     if not os.path.isfile(f"{output_prefix}BrainExtractionMask.nii.gz"):
         subprocess.run(command, shell=True, check=True)
-    return f"{output_prefix}BrainExtractionMask.nii.gz"
 
+
+    # --- Step 2: ANTsPyNet-based brain extraction ---
+    t1 = ants.image_read(t1_path)
+    # FreeSurfer-flavored
+    seg_fs = antspynet.brain_extraction(t1, modality="t1nobrainer", verbose=True)
+    fs_out = f"{output_prefix}seg_FS_flavored.nii.gz"
+    ants.image_write(seg_fs, fs_out)
+    myutils.log_message(f"ANTsPyNet FreeSurfer-flavored brain extraction output: {fs_out}")
+        
+    # Combined
+    seg_comb = antspynet.brain_extraction(t1, modality="t1combined", verbose=True)
+    comb_out = f"{output_prefix}seg_Combined.nii.gz"
+    ants.image_write(seg_comb, comb_out)
+    myutils.log_message(f"Saved: {comb_out}")
+    seg_fs_bin = seg_fs.threshold_image(1.5, 2.0, 1, 0, binary=True)  # binarizza
+    seg_comb_bin = seg_comb.threshold_image(1.5, 3.0, 1, 0, binary=True)  # binarizza
+    seg_union = (seg_fs_bin + seg_comb_bin).threshold_image(0.5, 2.0, 1, 0)
+    union_out = f"{output_prefix}seg_CombinedPlusFS.nii.gz"
+    ants.image_write(seg_union, union_out)
+    myutils.log_message(f"Saved: {union_out}")
+
+    return {
+        "standard_mask": f"{output_prefix}BrainExtractionMask.nii.gz",
+        "fs_mask": fs_out,
+        "combined_mask": comb_out,
+        "combined_plus_fs_mask": union_out
+
+    }
 # Funzione per la correzione del bias field con N4 (SimpleITK)
 def n4_bias_correction(input_image_path, input_mask_path, output_image_path):
     """
@@ -97,7 +116,11 @@ def n4_bias_correction(input_image_path, input_mask_path, output_image_path):
     """
     if not os.path.isfile(output_image_path):
         input_image = ants.image_read(input_image_path)
-        input_mask = ants.image_read(input_mask_path)
+        if input_mask_path is not None:
+            input_mask = ants.image_read(input_mask_path)
+        else:
+            input_mask = None
+
         corrected_img = ants.n4_bias_field_correction(input_image, mask=input_mask, shrink_factor=4, rescale_intensities=True)
         ants.image_write(corrected_img, output_image_path)
     myutils.log_message(f"{input_image_path} -> {output_image_path}")
@@ -223,31 +246,40 @@ if __name__ == "__main__":
 
     log_step("Move to MNI space", INPUT_NIFTI, CURRENT_FILE, {"TransformType": "Rigid"})
 
+    print(f"[sub-{sub_id}] N4 Bias Field Correction...")
+
+    myutils.log_message("--------------------- Step 1")
+    myutils.log_message("N4 Bias Field Correction")
+    n4_step1 = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-N4step1_T1w.nii.gz")
+    n4_whole = n4_bias_correction(CURRENT_FILE, None, n4_step1)
+
+    log_step("N4 Bias Field Correction", CURRENT_FILE, n4_whole, {"Tool": "ANTs N4"})
+
     # Step 1: Running Brain Extraction ANTs
     print(f"[sub-{sub_id}] Brain Extraction ANTs...")
-    myutils.log_message("--------------------- Step 1")
+    myutils.log_message("--------------------- Step 2")
     myutils.log_message("Brain Extraction ANTs")
     mask_prefix = os.path.join(OUTPUT_DIR, "sub-{sub}_desc-brain_".format(sub=sub_id))
-    mask_file = brain_extraction_ants(CURRENT_FILE, f"{OUTPUT_DIR}/brainExtraction_ants/output_", TEMPLATE_DIR)
-    bids_mask_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-brain_mask.nii.gz")
-    shutil.copy(mask_file, bids_mask_file)
+    mask_files = run_ants_brain_extraction(n4_whole, f"{OUTPUT_DIR}/brainExtraction_ants/output_", TEMPLATE_DIR)
+    bids_mask_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-brain_mask.nii.gz")
+    shutil.copy(mask_files['standard_mask'], bids_mask_file)
 
-    log_step("Brain Extraction", CURRENT_FILE, bids_mask_file, {"Method": "ANTs", "Template": "MNI152_NLin_2009a_Asym"})
+    log_step("Brain Extraction", n4_whole, bids_mask_file, {"Method": "ANTs", "Template": "MNI152_NLin_2009a_Asym"})
 
     # Step 2: Normalizzazione intensità 0-100
-    myutils.log_message("--------------------- Step 2")
+    myutils.log_message("--------------------- Step 3")
     myutils.log_message("Normalizzazione intensità 0-100")
-    preproc_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-preproc_T1w.nii.gz")
-    normalized = normalize_intensity(CURRENT_FILE, bids_mask_file, preproc_file)
-    log_step("Intensity Normalization", CURRENT_FILE, preproc_file, {"Range": "0-100"})
+    preproc_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-norm_T1w.nii.gz")
+    normalized = normalize_intensity(n4_whole, bids_mask_file, preproc_file)
+    log_step("Intensity Normalization", n4_whole, preproc_file, {"Range": "0-100"})
 
     # Step 3: Bias Field Correction
     print(f"[sub-{sub_id}] N4 Bias Field Correction...")
 
-    myutils.log_message("--------------------- Step 3")
+    myutils.log_message("--------------------- Step 4")
     myutils.log_message("N4 Bias Field Correction")
-    n4_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-N4_T1w.nii.gz")
-    n4_corrected = n4_bias_correction(normalized, bids_mask_file, n4_file)
+    n4_step2 = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-N4_T1w.nii.gz")
+    n4_corrected = n4_bias_correction(normalized, bids_mask_file, n4_step2)
 
     log_step("N4 Bias Field Correction", normalized, n4_corrected, {"Tool": "ANTs N4"})
 
@@ -265,21 +297,21 @@ if __name__ == "__main__":
     # Step 4: Brain masking
     print(f"[sub-{sub_id}] Brain masking...")
 
-    myutils.log_message("--------------------- Step 4")
+    myutils.log_message("--------------------- Step 5")
     myutils.log_message("Brain masking")
-    brain_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-brain_T1w.nii.gz")
+    brain_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-brain_T1w.nii.gz")
 
-    brain_extraction(normalized, bids_mask_file, brain_file)
+    apply_brain_mask(normalized, bids_mask_file, brain_file)
     log_step("Brain Masking", normalized, brain_file, {"Method": "Masking with ANTs Mask"})
 
     # Step 5: Registrazione all'MNI
     print(f"[sub-{sub_id}] Registering T1 to MNI...")
 
-    myutils.log_message("--------------------- Step 5")
+    myutils.log_message("--------------------- Step 6")
     myutils.log_message("MNI registration")
 
     template_file = os.path.join(TEMPLATE_DIR, "mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz")
-    mni_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_space-MNI_desc-preproc_T1w.nii.gz")
+    mni_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-preproc_T1w.nii.gz")
     normalized_mni = normalize_to_mni(normalized, TEMPLATE_MNI_HR, OUTPUT_DIR, sub_id, transform_type='SyN')
     log_step("MNI Registration", normalized, normalized_mni, {"TransformType": "SyN"})
     print(f"[sub-{sub_id}] ✅ T1 preprocessing completed.")
@@ -291,7 +323,7 @@ if __name__ == "__main__":
 
     final_report = {
         "PipelineDescription": {
-            "Name": "Custom ANTs Anatomical Preprocessing",
+            "Name": "Custom T1 Anatomical Preprocessing",
             "Version": "1.0",
             "CodeURL": "https://github.com/alicegiubergia/project_fmri_hires"
         },

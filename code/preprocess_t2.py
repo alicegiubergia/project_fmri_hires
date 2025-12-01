@@ -4,6 +4,7 @@ import os
 import json
 import argparse
 from datetime import datetime
+import numpy as np
 
 PROCESSING_LOG = []
 
@@ -41,20 +42,32 @@ def preprocess_t2(sub_id, t2_file, t1_file, t1_brainmask, output_dir):
     ants.image_write(t2_in_t1, t2_in_t1_fn)
     log_step("Move to T1 space", t2_file, t2_in_t1_fn, {"TransformType": "Rigid"})
 
-    # === 3. Apply T1 brain mask ===
+    # === 3. Intensity normalization 0-100 ===
+    print(f"[sub-{sub_id}] Normalizing T2 intensity (0-100)...")
+    img = ants.image_read(t2_in_t1_fn)
+    mask = ants.image_read(t1_brainmask)
+    # Applica la maschera
+    masked = img * mask
+
+    # Calcola min/max solo nei voxel validi
+    vals = masked[mask > 0]
+    pmean = vals.mean()
+    norm = (img / pmean) * 100
+    log_step("Intensity Normalization", t2_in_t1_fn, t2_in_t1_fn, {"Range": "0-100"})
+
+    # === 4. Apply T1 brain mask ===
     print(f"[sub-{sub_id}] Applying T1 brain mask...")
-    brain_mask = ants.image_read(t1_brainmask)
-    t2_brain = t2_in_t1 * brain_mask
+    t2_brain = norm * mask
     t2_brain_fn = f"{prefix}desc-T1space_desc-brain_T2w.nii.gz"
     ants.image_write(t2_brain, t2_brain_fn)
 
     log_step("Brain Masking", t2_in_t1_fn, t2_brain_fn, {"Method": "Masking with T1 Mask"})
 
-    # === 4. Save JSON log ===
+    # === 5. Save JSON log ===
  
     final_report = {
         "PipelineDescription": {
-            "Name": "Custom Anatomical Preprocessing",
+            "Name": "Custom T2 Anatomical Preprocessing",
             "Version": "1.0",
             "CodeURL": "https://github.com/alicegiubergia/project_fmri_hires"
         },
