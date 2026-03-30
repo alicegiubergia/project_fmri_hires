@@ -1,0 +1,214 @@
+{
+    "descriptions": 
+    [
+
+        {
+            "datatype": "anat",
+            "suffix": "T1w",
+            "criteria": {
+                "SeriesDescription": "3D Sag T1 MPRAGE 0.6iso"
+            }
+        },
+
+        {
+            "datatype": "anat",
+            "suffix": "T2w",
+            "criteria": {
+                "SeriesDescription": "3D Sag T2 Cube FS"
+            }
+        },
+
+
+
+
+
+        
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-1",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER"],
+		"SeriesNumber": "5"
+             },
+            "custom_entities": "task-reading_run-01_part-mag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-1",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "REAL"],
+		"SeriesNumber": "5"
+             },
+            "custom_entities": "task-reading_run-01_part-real",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-1",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "IMAGINARY"],
+		"SeriesNumber": "5"
+             },
+            "custom_entities": "task-reading_run-01_part-imag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-2",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER"],
+		"SeriesNumber": "7"
+            },
+            "custom_entities": "task-reading_run-02_part-mag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-2",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "REAL"],
+		"SeriesNumber": "7"
+            },
+            "custom_entities": "task-reading_run-02_part-real",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-2",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "IMAGINARY"],
+		"SeriesNumber": "7"
+            },
+            "custom_entities": "task-reading_run-02_part-imag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-3",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER"],
+		"SeriesNumber": "12"
+            },
+            "custom_entities": "task-reading_run-03_part-mag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-3",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "REAL"],
+		"SeriesNumber": "12"
+            },
+            "custom_entities": "task-reading_run-03_part-real",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+        {
+            "datatype": "func",
+            "suffix": "bold",
+            "id": "id_task_reading_run-3",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 3x3 tr3 mp10 fov192",
+                "ImageType": ["ORIGINAL", "PRIMARY", "OTHER", "IMAGINARY"],
+		"SeriesNumber": "12"
+            },
+            "custom_entities": "task-reading_run-03_part-imag",
+            "sidecar_changes": {
+                "TaskName": "reading"
+            }
+        },
+
+
+
+
+
+
+        {
+            "datatype": "fmap",
+            "suffix": "epi",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 pep0 3x3 tr3 mp10 fov192",
+		"SeriesNumber": "6"
+            },
+            "sidecar_changes": {
+                "TaskName": "reading",
+                "intendedFor": [
+                    "id_task_reading_run-1",
+                    "id_task_reading_run-2"
+                ],
+                "dir": "PA"
+            },
+            "custom_entities": "dir-PA"
+        },
+        {
+            "datatype": "fmap",
+            "suffix": "epi",
+            "criteria": {
+                "SeriesDescription": "fMRI 0.8 pep0 3x3 tr3 mp10 fov192",
+		"SeriesNumber": "11"
+            },
+            "sidecar_changes": {
+                "TaskName": "reading",
+                "intendedFor": [
+                    "id_task_reading_run-3"
+                ],
+                "dir": "PA"
+            },
+            "custom_entities": "dir-PA"
+        }
+
+    ],
+
+    "post_op": [
+      {
+        "cmd": "fslroi src_file dst_file 4 -1",
+        "datatype": "func",
+        "suffix": [
+          "bold"
+        ]
+      }
+    ]
+    
+    
+}

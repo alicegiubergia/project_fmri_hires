@@ -10,7 +10,7 @@ Gli step includono:
 2. Brain extraction con ANTs.
 3. Correzione del bias field con N4 (SimpleITK).
 4. Normalizzazione dell'intensità dell'immagine (0-100)
-5. Registrazione al template (MNI152 - ICBM 2009b Nonlinear Asymmetric) con ANTs.
+5. Registrazione al template (MNI152 - ICBM 2009c Nonlinear Asymmetric) con ANTs.
 6. Salvataggio dei file in cartella derivatives BIDS-compliant.
 7. Salvataggio JSON report con tutti gli step e versioni software
 
@@ -29,6 +29,7 @@ from datetime import datetime
 import shutil
 import myutils
 import argparse
+from templateflow import api as tflow
 
 # Log globale degli step per il JSON finale
 PROCESSING_LOG = []
@@ -66,16 +67,14 @@ def apply_brain_mask(input_image_path, input_mask_path, output_brain_path):
         save_nifti(new_data, affine, header, output_brain_path)
     myutils.log_message(f"output: {output_brain_path}")
 
-def run_ants_brain_extraction(t1_path, output_prefix, template_dir):
+def run_ants_brain_extraction(t1_path, output_prefix, template_path, template_mask_path):
     """
     Esegue brain extraction con ANTs:
       1. antsBrainExtraction.sh (standard)
       2. antspynet brain extraction (FreeSurfer-flavored e Combined)
     """ 
     # --- Step 1: ANTs BrainExtraction.sh ---
-    template_mask = f"{template_dir}/mni_icbm152_nlin_asym_09a/mni_icbm152_t1_tal_nlin_asym_09a_mask.nii"
-    template = f"{template_dir}/mni_icbm152_nlin_asym_09a/mni_icbm152_t1_tal_nlin_asym_09a.nii"
-    command = f"antsBrainExtraction.sh -d 3 -a {t1_path} -m {template_mask} -e {template} -o {output_prefix}"
+    command = f"antsBrainExtraction.sh -d 3 -a {t1_path} -m {template_mask_path} -e {template_path} -o {output_prefix}"
     myutils.log_message(command)
 
     if not os.path.isfile(f"{output_prefix}BrainExtractionMask.nii.gz"):
@@ -185,13 +184,32 @@ def normalize_to_mni(moving_path, fixed_path, output_dir, sub_id, transform_type
         fixed_img = ants.image_read(fixed_path)
         myutils.log_message(f"--- Starting {transform_type} registration to MNI ---")
 
+        # 1. Rigid registration
         tx = ants.registration(fixed=fixed_img, 
                                          moving=moving_img, 
                                          type_of_transform=transform_type, 
                                          outprefix=prefix,
                                          verbose=True)
+        
+        # 2. Creo reference con risoluzione originale
+        # Template MNI è ad alta risoluzione, ma voglio mantenere la risoluzione originale della T1
+        # Creo un'immagine di riferimento con la stessa risoluzione della T1 ma nello spazio MNI
+        resampled_img = ants.resample_image(fixed_img,
+                                            moving_img.spacing,
+                                            use_voxels=False,
+                                            interp_type=0)
+        if transform_type == "SyN":
+            ref_img = fixed_img
+        elif transform_type == "Rigid":
+            ref_img = resampled_img
 
-        warped_img = tx['warpedmovout']
+        # 3. Applico la trasformazione al moving_img usando il reference creato                                                                                                                    moving_img)
+        warped_img = ants.apply_transforms(fixed=ref_img,
+                                            moving=moving_img,
+                                            transformlist=tx['fwdtransforms'],
+                                            interpolator='linear')
+        
+        # 4. Salvo l'immagine nello spazio MNI con la risoluzione originale
         ants.image_write(warped_img, warped_output)
      
         myutils.log_message(f"Registrazione completata ({transform_type})")
@@ -208,16 +226,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="T1 preprocessing pipeline")
     parser.add_argument("--input", required=True, help="Path al file T1w.nii.gz NIfTI di input")
     parser.add_argument("--sub", required=True, help="Subject ID (es. '01')")
-    parser.add_argument("--template_dir", default="../templates", help="Path template MNI (default: ../templates)")
     parser.add_argument("--output_dir", default="../derivatives/mypipeline", help="Output folder (default: derivatives/mypipeline/sub-XX/anat)")
     args = parser.parse_args()
     
-    # Step 0: Set filenames
-    TEMPLATE_DIR=args.template_dir
-    TEMPLATE_MNI_HR = "{TEMPLATE_DIR}/mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz".format(TEMPLATE_DIR=TEMPLATE_DIR)
     sub_id = args.sub
     INPUT_NIFTI = args.input
-
+ 
     # Cartella BIDS-compliant per i risultati
     OUTPUT_DIR = os.path.join(args.output_dir, f"sub-{sub_id}", "anat")
     os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -226,8 +240,19 @@ if __name__ == "__main__":
     LOG_FILE = os.path.join(OUTPUT_DIR, "preprocess_t1.log")
     myutils.set_log_file(LOG_FILE)
 
-    #INPUT_DIR = os.path.dirname(os.path.abspath(INPUT_NIFTI))
-    #OUTPUT_DIR = INPUT_DIR.replace("nifti", "derivatives/mypipeline")
+    myutils.log_message("=== Configurazione TemplateFlow ===")   
+    print("Recupero template MNI da TemplateFlow (se non presenti verranno scaricati)...")
+
+    # Recupera i template (tflow restituisce una stringa/Path o una lista di essi)
+    t1w_res = tflow.get("MNI152NLin6Asym", resolution=1, desc=None, suffix="T1w", extension=".nii.gz")
+    mask_res = tflow.get("MNI152NLin6Asym", resolution=1, desc="brain", suffix="mask", extension=".nii.gz")
+    
+    # Assicuriamoci di estrarre la stringa corretta nel caso restituisca una lista
+    TEMPLATE_MNI_HR = str(t1w_res[0] if isinstance(t1w_res, list) else t1w_res)
+    TEMPLATE_MASK = str(mask_res[0] if isinstance(mask_res, list) else mask_res)
+    
+    myutils.log_message(f"Template T1w: {TEMPLATE_MNI_HR}")
+    myutils.log_message(f"Template Mask: {TEMPLATE_MASK}")
 
     ORIG_FILE = f"{OUTPUT_DIR}/sub-{sub_id}_orig_T1w.nii.gz"
     shutil.copy(INPUT_NIFTI, ORIG_FILE)
@@ -260,11 +285,11 @@ if __name__ == "__main__":
     myutils.log_message("--------------------- Step 2")
     myutils.log_message("Brain Extraction ANTs")
     mask_prefix = os.path.join(OUTPUT_DIR, "sub-{sub}_desc-brain_".format(sub=sub_id))
-    mask_files = run_ants_brain_extraction(n4_whole, f"{OUTPUT_DIR}/brainExtraction_ants/output_", TEMPLATE_DIR)
+    mask_files = run_ants_brain_extraction(n4_whole, f"{OUTPUT_DIR}/brainExtraction_ants/output_", TEMPLATE_MNI_HR, TEMPLATE_MASK)
     bids_mask_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-brain_mask.nii.gz")
     shutil.copy(mask_files['standard_mask'], bids_mask_file)
 
-    log_step("Brain Extraction", n4_whole, bids_mask_file, {"Method": "ANTs", "Template": "MNI152_NLin_2009a_Asym"})
+    log_step("Brain Extraction", n4_whole, bids_mask_file, {"Method": "ANTs", "Template": "MNI152NLin6Asym_res-01"})
 
     # Step 2: Normalizzazione intensità 0-100
     myutils.log_message("--------------------- Step 3")
@@ -310,7 +335,7 @@ if __name__ == "__main__":
     myutils.log_message("--------------------- Step 6")
     myutils.log_message("MNI registration")
 
-    template_file = os.path.join(TEMPLATE_DIR, "mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz")
+    #template_file = os.path.join(TEMPLATE_DIR, "mni_icbm152_nlin_asym_09b_nifti/mni_icbm152_t1_tal_nlin_asym_09b_hires.nii.gz")
     mni_file = os.path.join(OUTPUT_DIR, f"sub-{sub_id}_desc-preproc_T1w.nii.gz")
     normalized_mni = normalize_to_mni(normalized, TEMPLATE_MNI_HR, OUTPUT_DIR, sub_id, transform_type='SyN')
     log_step("MNI Registration", normalized, normalized_mni, {"TransformType": "SyN"})
