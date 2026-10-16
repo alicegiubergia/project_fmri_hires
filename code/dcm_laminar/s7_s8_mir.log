@@ -1,0 +1,501 @@
+=== sub-007 (mirroring = spmT_0008) ===
+  -- visual (Vis)
+  decompressione sub-007_residuals_4d.nii.gz -> file temporaneo ...
+  fetta 181/416
+  fetta 191/416
+  fetta 201/416
+  fetta 211/416
+  fetta 221/416
+  fetta 231/416
+  fetta 241/416
+  fetta 251/416
+  fetta 261/416
+  fetta 271/416
+  fetta 281/416
+  fetta 291/416
+  fetta 301/416
+  fetta 311/416
+  fetta 321/416
+  fetta 331/416
+  fetta 341/416
+  fetta 351/416
+  fetta 361/416
+     run 1
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-01_psc.nii
+    Image details: 75 X | 80 Y | 80 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_layers.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -35.687
+    Max. value = 54.7359
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_columns.nii
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_alf.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -3.29312
+    Max. value = 2.46317
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-01_devtmp_deveinDeconv.nii
+  Finished.
+     run 2
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-02_psc.nii
+    Image details: 75 X | 80 Y | 80 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_layers.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -33.1981
+    Max. value = 50.9861
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_columns.nii
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_alf.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -3.57781
+    Max. value = 2.12113
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-02_devtmp_deveinDeconv.nii
+  Finished.
+     run 3
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-03_psc.nii
+    Image details: 75 X | 80 Y | 80 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_layers.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -21.0143
+    Max. value = 75.5576
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_columns.nii
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_alf.nii.gz
+    Image details: 75 X | 80 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -4.79413
+    Max. value = 6.42986
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Vis_run-03_devtmp_deveinDeconv.nii
+  Finished.
+  -- ventral (Ven)
+=======================
+LayNii v2.9.0          
+=======================
+LN2_COLUMNS
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_rim.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_midgm.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Initial number of columns: 0
+  Desired number of columns: 5
+  Start finding connected clusters...
+    Nr. of connected clusters within midgm input: 1
+  Start generating columns...
+    Column [1/5] | Max. distance between points: 21.1491 [voxel dimension units]    Column [2/5] | Max. distance between points: 17.7216 [voxel dimension units]    Column [3/5] | Max. distance between points: 14.1646 [voxel dimension units]    Column [4/5] | Max. distance between points: 13.3888 [voxel dimension units]    Column [5/5] | Max. distance between points: 10.8682 [voxel dimension units]
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_cols_centroids5.nii.gz
+
+  Start Voronoi...
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_cols_columns5.nii.gz
+
+  Finished.
+     run 1
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-01_psc.nii
+    Image details: 74 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_layers.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -46.1945
+    Max. value = 37.0557
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_columns.nii
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_alf.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -12.7748
+    Max. value = 5.75478
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-01_devtmp_deveinDeconv.nii
+  Finished.
+     run 2
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-02_psc.nii
+    Image details: 74 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_layers.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -41.4072
+    Max. value = 32.4283
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_columns.nii
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_alf.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -4.5852
+    Max. value = 2.77296
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-02_devtmp_deveinDeconv.nii
+  Finished.
+     run 3
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-03_psc.nii
+    Image details: 74 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_layers.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -37.0219
+    Max. value = 76.9345
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_columns.nii
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_alf.nii.gz
+    Image details: 74 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -9.80548
+    Max. value = 7.8956
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Ven_run-03_devtmp_deveinDeconv.nii
+  Finished.
+  -- dorsal (Dors)
+=======================
+LayNii v2.9.0          
+=======================
+LN2_COLUMNS
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_rim.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_midgm.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Initial number of columns: 0
+  Desired number of columns: 5
+  Start finding connected clusters...
+    Nr. of connected clusters within midgm input: 2
+  Start generating columns...
+    Column [1/5] | Max. distance between points: 21.4426 [voxel dimension units]    Column [2/5] | Max. distance between points: 16.3847 [voxel dimension units]    Column [3/5] | Max. distance between points: 13.9423 [voxel dimension units]    Column [4/5] | Max. distance between points: 13.9423 [voxel dimension units]    Column [5/5] | Max. distance between points: 9.95527 [voxel dimension units]
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_cols_centroids5.nii.gz
+
+  Start Voronoi...
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_cols_columns5.nii.gz
+
+  Finished.
+     run 1
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-01_psc.nii
+    Image details: 79 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_layers.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -23.6018
+    Max. value = 78.6612
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_columns.nii
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_alf.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -2.2606
+    Max. value = 2.89578
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-01_devtmp_deveinDeconv.nii
+  Finished.
+     run 2
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-02_psc.nii
+    Image details: 79 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_layers.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -28.4624
+    Max. value = 62.0598
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_columns.nii
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_alf.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -2.77046
+    Max. value = 2.76177
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-02_devtmp_deveinDeconv.nii
+  Finished.
+     run 3
+  decompressione tmp_run.nii.gz -> file temporaneo ...
+=======================
+LayNii v2.9.0          
+=======================
+LN2_DEVEIN
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-03_psc.nii
+    Image details: 79 X | 80 Y | 81 Z | 180 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_layers.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Number of discete layers = 10
+    Min. layer value = 1
+    Max. layer value = 10
+
+  Before devein:
+    Min. value = -32.7683
+    Max. value = 74.2224
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_columns.nii
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 8
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_alf.nii.gz
+    Image details: 79 X | 80 Y | 81 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+  Number of columns = 5
+  After devein:
+    Min. value = -3.46534
+    Max. value = 3.22595
+
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-007/mirroring/Dors_run-03_devtmp_deveinDeconv.nii
+  Finished.
+=== sub-008 (mirroring = spmT_0008) ===
+  -- visual (Vis)
+=======================
+LayNii v2.9.0          
+=======================
+LN2_COLUMNS
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_rim.nii.gz
+    Image details: 79 X | 76 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_midgm.nii.gz
+    Image details: 79 X | 76 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Initial number of columns: 0
+  Desired number of columns: 5
+  Start finding connected clusters...
+    Nr. of connected clusters within midgm input: 1
+  Start generating columns...
+    Column [1/5] | Max. distance between points: 21.965 [voxel dimension units]    Column [2/5] | Max. distance between points: 14.5945 [voxel dimension units]    Column [3/5] | Max. distance between points: 13.9703 [voxel dimension units]    Column [4/5] | Max. distance between points: 10.111 [voxel dimension units]    Column [5/5] | Max. distance between points: 9.10674 [voxel dimension units]
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_cols_centroids5.nii.gz
+
+  Start Voronoi...
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_cols_columns5.nii.gz
+
+  Finished.
+  decompressione sub-008_residuals_4d.nii.gz -> file temporaneo ...

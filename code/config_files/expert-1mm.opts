@@ -1,0 +1,14 @@
+# expert-1mm.opts -- FreeSurfer v8 
+#
+# Questo file viene passato a recon-all con -expert expert-1mm.opts
+#
+# Risoluzione nativa di riferimento: 1 x 1 x 1 mm
+# ---------------------------------------------------------------------------
+# mri_synthstrip -- skull stripping neurale integrato in autorecon1 (FS8)
+# ---------------------------------------------------------------------------
+# --no-csf: esclude il CSF dalla mask, evita che la pial surface
+#           venga trascinata dentro i solchi ad alta risoluzione
+mri_synthstrip --no-csf
+
+
+

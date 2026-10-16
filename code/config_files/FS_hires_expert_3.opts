@@ -1,0 +1,2 @@
+mri_watershed -h 20
+mris_make_surfaces -min_gray_at_white_border 80 -min_border_white 100 -max_gray_at_csf_border 25 -max_csf 30

@@ -1,0 +1,32 @@
+=== sub-008 (mirroring = spmT_0008) ===
+  -- visual (Vis)
+=======================
+LayNii v2.9.0          
+=======================
+LN2_COLUMNS
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_rim.nii.gz
+    Image details: 79 X | 76 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 16
+
+    File name: /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_midgm.nii.gz
+    Image details: 79 X | 76 Y | 80 Z | 1 T 
+    Voxel size = 0.2 x 0.2 x 0.2
+    Datatype = 4
+
+  Initial number of columns: 0
+  Desired number of columns: 5
+  Start finding connected clusters...
+    Nr. of connected clusters within midgm input: 1
+  Start generating columns...
+    Column [1/5] | Max. distance between points: 21.965 [voxel dimension units]    Column [2/5] | Max. distance between points: 14.5945 [voxel dimension units]    Column [3/5] | Max. distance between points: 13.9703 [voxel dimension units]    Column [4/5] | Max. distance between points: 10.111 [voxel dimension units]    Column [5/5] | Max. distance between points: 9.10674 [voxel dimension units]
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_cols_centroids5.nii.gz
+
+  Start Voronoi...
+    Writing output as:
+      /mnt/store1/projects/progetto_layer/data/derivatives/roi-deveined/sub-008/mirroring/Vis_cols_columns5.nii.gz
+
+  Finished.
+  decompressione sub-008_residuals_4d.nii.gz -> file temporaneo ...

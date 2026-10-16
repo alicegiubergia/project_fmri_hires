@@ -1,0 +1,17 @@
+nohup: ignoring input
+Traceback (most recent call last):
+  File "/mnt/store1/projects/progetto_layer/code/dcm_laminar/psc_alf.py", line 129, in <module>
+    do_alf(img, a.out, a.tr, a.band, mask)
+  File "/mnt/store1/projects/progetto_layer/code/dcm_laminar/psc_alf.py", line 95, in do_alf
+    d = np.asarray(img.dataobj[:, :, z, :], dtype=np.float32)
+  File "/home/dperuzzo/anaconda3/lib/python3.7/site-packages/nibabel/arrayproxy.py", line 397, in __getitem__
+    return self._get_scaled(dtype=None, slicer=slicer)
+  File "/home/dperuzzo/anaconda3/lib/python3.7/site-packages/nibabel/arrayproxy.py", line 358, in _get_scaled
+    scaled = apply_read_scaling(self._get_unscaled(slicer=slicer), scl_slope, scl_inter)
+  File "/home/dperuzzo/anaconda3/lib/python3.7/site-packages/nibabel/arrayproxy.py", line 345, in _get_unscaled
+    lock=self._lock)
+  File "/home/dperuzzo/anaconda3/lib/python3.7/site-packages/nibabel/fileslice.py", line 790, in fileslice
+    arr_data = read_segments(fileobj, segments, n_bytes, lock)
+  File "/home/dperuzzo/anaconda3/lib/python3.7/site-packages/nibabel/fileslice.py", line 690, in read_segments
+    raise ValueError("Oh dear, n_bytes does not look right")
+ValueError: Oh dear, n_bytes does not look right

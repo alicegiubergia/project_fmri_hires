@@ -1,0 +1,5 @@
+mri_normalize -gentle -seed 1234
+mri_segment -wlo 85 -ghi 105
+mris_inflate -dist 0.100000 -n 40
+mris_make_surfaces -nsigma_above 4 -nsigma_below 4 -T2_min_inside 90 -T2_outside_max 75
+mri_pretess -w
