@@ -24,6 +24,9 @@ MAPPING = {'spmT_0001':'baseline',
 
 UPSAMP_SPACING = (0.2, 0.2, 0.2) 
 NR_LAYERS = 10
+# Metrica di profondita' LayNii: 'equidist' o 'equivol' (anche via LAYER_METHOD)
+METHOD = os.environ.get('LAYER_METHOD', 'equidist')
+assert METHOD in ('equidist', 'equivol'), METHOD
 
 def resample_ants(input_path, output_path, spacing, interp_type):
     print("Resampling:")
@@ -48,7 +51,7 @@ for contrast in MAPPING.keys():
         print(f"  Processing region: {region}")
 
         # Cortical depth file
-        NII_METRIC = f'{ROOT_DIR}/layer_fmri/{SUB}/{SUB}_con-{TASK[MAPPING[contrast]]}_label-{region}_metric_equidist.nii'
+        NII_METRIC = f'{ROOT_DIR}/layer_fmri/{SUB}/{SUB}_con-{TASK[MAPPING[contrast]]}_label-{region}_metric_{METHOD}.nii'
 
         # ROI mask
         NII_ROI = f'{ROOT_DIR}/rois/{SUB}/{SUB}_con-{TASK[MAPPING[contrast]]}_desc-polishCleaned_label-{region}_res-up_dseg.nii.gz'
@@ -97,8 +100,8 @@ for contrast in MAPPING.keys():
         plt.xlabel('Normalized cortical depth (0=WM, 1=CSF)')
         plt.ylabel('Activation (t-statistic)')
         plt.title(TITLE_SCATTER)
+        plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_scatter_{region}_{contrast}_{METHOD}.png"), dpi=300)
         plt.show()
-        plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_scatter_{region}_{contrast}.png"), dpi=300)
         plt.close()
         # ================================================================
         # PLOT 2: 2D Histogram (Individuale per ROI)
@@ -120,8 +123,8 @@ for contrast in MAPPING.keys():
         pad = 0.02
         colorbar.ax.set_position([box.x0, box.y0 + pad, width, height])
         colorbar.set_label('Voxel counts')
+        plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_hist_{region}_{contrast}_{METHOD}.png"), dpi=300)
         plt.show()
-        plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_hist_{region}_{contrast}.png"), dpi=300)
         plt.close()
         # ================================================================
         # PREPARAZIONE DATI PER PLOT 3 (Line Plot Cumulativo)
@@ -150,7 +153,7 @@ for contrast in MAPPING.keys():
         print(f"[WARNING] Nessun dato valido per l'intero contrasto: {contrast}. Salto il Line Plot.")
         continue
     
-    TITLE_LINE = f"Line plot\nCortical depth layer profile\nContrast: {contrast}"
+    TITLE_LINE = f"Line plot\nCortical depth layer profile\nContrast: {contrast} [{METHOD}]"
     data_x_bins = np.arange(1, NR_LAYERS + 1)
     
     plt.figure(figsize=(8, 6))
@@ -178,7 +181,6 @@ for contrast in MAPPING.keys():
     
     # Mostra la legenda con i colori associati automaticamente alle ROI
     plt.legend(loc="best")
+    plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_line_{contrast}_{METHOD}.png"), dpi=300)
     plt.show()
-    plt.savefig(os.path.join(OUTPUT_DIR, f"{SUB}/{SUB}_line_{contrast}.png"), dpi=300)
     plt.close()
-    

@@ -13,6 +13,10 @@ Per questo il test NON e' sulla forma di una condizione singola, ma sul
 diversi alla stessa profondita', il guadagno vascolare depth-dependent si
 cancella perche' e' identico nelle due condizioni. L'effetto di interesse e'
 quindi l'interazione livello x compartimento.
+I profili NON vengono piu' estratti qui ne' salvati in un CSV proprio: arrivano
+dal file unico di export_profiles.py (creato al volo se manca). La metrica di
+profondita' e' quella di glp (glp.METHOD), e gli output vanno in
+group_layer_ffb/<METHOD>/.
 
 Riusa le funzioni di group_layer_plotting_psc.py (stessa cartella).
 
@@ -26,13 +30,14 @@ import matplotlib.pyplot as plt
 from scipy import stats
 
 import group_layer_plotting_psc as glp
+import export_profiles as ep
 
 
 # ----------------------------------------------------------------------------
 # CONFIG
 # ----------------------------------------------------------------------------
 
-OUT_DIR = os.path.join(glp.ROOT_DIR, 'group_layer_ffb')
+OUT_DIR = os.path.join(glp.ROOT_DIR, 'group_layer_ffb', glp.OUT_TAG)
 
 # [PLACEHOLDER] Definizione dei compartimenti sui 10 bin (1 = WM, 10 = CSF).
 # Il bin 1 e il bin 10 sono i piu' esposti al volume parziale con WM e CSF:
@@ -100,25 +105,17 @@ def level_value(cond_name):
     return float(m.group(1)) if m else np.nan
 
 
-def build_profile_table(design):
-    """Tabella dei profili: (sub, roi, contrast) -> array di NR_LAYERS valori PSC."""
+def build_profile_table(df):
+    """Tabella dei profili: (sub, roi, contrast) -> {'profile', 'counts'}.
+
+    Costruita dal CSV unico di export_profiles.py. Servono solo i contrasti di
+    livello (le analisi qui non usano con_0001, 0008, 0009).
+    """
     table = {}
-    for contrast in glp.MAPPING.keys():
-        for region in glp.ROIS:
-            for sub in glp.SUBJECTS:
-                metric_path, roi_path = glp.subject_paths(sub, contrast, region)
-                if not (os.path.exists(metric_path) and os.path.exists(roi_path)):
-                    continue
-                try:
-                    prof, counts = glp.sample_psc_profile(
-                        sub, contrast, metric_path, roi_path, design)
-                except Exception as e:
-                    print(f"  [SKIP] {sub} {contrast} {region}: {e}")
-                    continue
-                if prof is None:
-                    continue
-                table[(sub, region, contrast)] = {'profile': prof,
-                                                  'counts': counts}
+    lv = df[df['condition'] == 'livello']
+    for (sub, region, contrast), g in lv.groupby(['subject', 'region', 'contrast']):
+        prof, counts = ep.profilo(g)
+        table[(sub, region, contrast)] = {'profile': prof, 'counts': counts}
     return table
 
 
@@ -373,7 +370,7 @@ def analyse_categorical(table, design, region, family):
 
         out['pairwise'][f'{a}_vs_{b}'] = entry
 
-    out['denominator_mode'] = glp.DENOMINATOR_MODE
+    out['method'] = glp.METHOD
     out['_cube'] = Y.tolist()
     return out
 
@@ -461,6 +458,7 @@ def plot_slopes(results, family):
 
     axes[0][0].set_ylabel("Pendenza PSC tra livelli (% per livello)", fontsize=11)
     fig.suptitle(f"Effetto del livello di {family} per compartimento\n"
+                 f"[{glp.OUT_TAG}]\n"
                  f"le differenze tra compartimenti sono l'effetto depth-specific",
                  fontsize=13, fontweight='bold')
     fig.tight_layout()
@@ -503,7 +501,8 @@ def plot_categorical(results, family):
         ax.legend(fontsize=9, frameon=True)
 
     axes[0][0].set_ylabel("$\\Delta$ percent signal change (%)", fontsize=11)
-    fig.suptitle(f"{family}: condizioni per compartimento corticale",
+    fig.suptitle(f"{family}: condizioni per compartimento corticale "
+                 f"[{glp.OUT_TAG}]",
                  fontsize=13, fontweight='bold')
     fig.tight_layout()
     path = os.path.join(OUT_DIR, f'conditions_{family}.png')
@@ -521,21 +520,9 @@ def main():
     np.random.seed(RNG_SEED)
 
     design = glp.load_design()
-    print("\nEstrazione profili...")
-    table = build_profile_table(design)
-    print(f"  {len(table)} profili estratti")
-
-    # Tabella lunga, per rifare le statistiche altrove (R, JASP...)
-    csv_path = os.path.join(OUT_DIR, 'laminar_profiles_psc.csv')
-    with open(csv_path, 'w') as f:
-        f.write(f"# denominator_mode={glp.DENOMINATOR_MODE}\n")
-        f.write("subject,roi,contrast,family,bin,psc,n_voxels\n")
-        for (sub, region, contrast), e in sorted(table.items()):
-            fam = glp.MAPPING[contrast]
-            for i in range(glp.NR_LAYERS):
-                f.write(f"{sub},{region},{contrast},{fam},{i + 1},"
-                        f"{e['profile'][i]:.6f},{e['counts'][i]}\n")
-    print(f"  -> {csv_path}")
+    print(f"\nProfili da export_profiles ({glp.OUT_TAG}) ...")
+    table = build_profile_table(ep.carica_o_estrai(design))
+    print(f"  -> {len(table)} profili di livello")
 
     all_results = {}
     for family in ['mirroring', 'spacing']:
@@ -547,6 +534,10 @@ def main():
             plot_categorical(results, family)
         else:
             plot_slopes(results, family)
+
+        all_results['_config'] = {'method': glp.METHOD,
+                                  'profiles_csv': ep.CSV_PATH,
+                                  'compartments': COMPARTMENTS}
 
     with open(os.path.join(OUT_DIR, 'ffb_stats.json'), 'w') as f:
         json.dump(all_results, f, indent=2)

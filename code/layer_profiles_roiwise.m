@@ -28,19 +28,24 @@ DEVEIN_ROOT = fullfile(BASE, 'data', 'derivatives', 'roi-deveined');
 SPM_ROOT    = fullfile(BASE, 'data', 'derivatives', 'hires_pipeline');
 SPM_SUBDIR  = 'stats-masked';
 
-ROI_SETS = {'baseline', 'mirroring', 'spacing'};
+ROI_SETS = {'mirroring', 'spacing'};
 REGIONS  = {'Dors', 'Ven', 'Vis'};
 N_LAYERS = 10;
 N_RUNS   = 3;
 GM_VALUE = 3;              % GM value in the LayNii rim file
 % contrast that defined each ROI set (flagged as primary in the TSV)
-PRIMARY  = struct('baseline', 'baseline', ...
-                  'mirroring', 'mirroring>baseline', ...
+% PRIMARY  = struct('baseline', 'baseline', ...
+%                   'mirroring', 'mirroring>baseline', ...
+%                   'spacing', 'spacing>baseline');
+
+PRIMARY  = struct('mirroring', 'mirroring>baseline', ...
                   'spacing', 'spacing>baseline');
+
 % output pipeline (BIDS derivatives)
-OUT_ROOT = fullfile(BASE, 'data', 'derivatives', 'layer-profiles');
-TASK     = 'reading';
-DESC     = 'deveinroiwise';    % BIDS labels: alphanumeric only
+OUT_ROOT     = fullfile(BASE, 'data', 'derivatives', 'layer-profiles');
+TASK         = 'reading';
+IN_FILE_DESC = 'd2mm';
+DESC         = [IN_FILE_DESC 'Deveinroiwise'];    % BIDS labels: alphanumeric only
 
 addpath('/home/matuser/matlab_toolbox/spm12');
 spm('defaults', 'fmri');
@@ -50,6 +55,7 @@ init_derivatives(OUT_ROOT, DEVEIN_ROOT);
 subs = dir(fullfile(DEVEIN_ROOT, 'sub-*'));
 subs = {subs([subs.isdir]).name};
 fprintf('Subjects found: %d\n', numel(subs));
+
 
 rows = {};
 for s = 1:numel(subs)
@@ -62,7 +68,7 @@ for s = 1:numel(subs)
     S = load(spm_file, 'SPM');  SPM = S.SPM;
     assert(numel(SPM.nscan) == N_RUNS, '%s: %d sessions in SPM.mat, expected %d', ...
         sub, numel(SPM.nscan), N_RUNS);
-    [C, cnames] = make_contrasts(SPM.xX.name);
+    [C, cnames, spm_idx] = make_contrasts(SPM.xX.name);
     fprintf('\n=== %s (%s) ===\n', sub, strjoin(cnames, ', '));
 
     for rs = 1:numel(ROI_SETS)
@@ -88,7 +94,7 @@ for s = 1:numel(subs)
             Ypsc_std = zeros(N_RUNS, N_LAYERS);
             row0 = 0;
             for r = 1:N_RUNS
-                f_dv  = sprintf('%s_run-%02d_devein.nii', prefix, r);
+                f_dv  = sprintf('%s_run-%02d_desc-%s_devein.nii', prefix, r, IN_FILE_DESC);
                 f_psc = sprintf('%s_run-%02d_psc.nii', prefix, r);
                 [y, nvox] = layer_means(f_dv, masks, dim);
                 assert(size(y, 1) == SPM.nscan(r), ...
@@ -109,7 +115,7 @@ for s = 1:numel(subs)
                 for c = 1:numel(cnames)
                     is_primary = strcmp(cnames{c}, PRIMARY.(ROI_SETS{rs}));
                     rows(end + 1, :) = {sub, ROI_SETS{rs}, REGIONS{rg}, l, ...
-                        nvox(l), mean(Ypsc_std(:, l)), c, cnames{c}, is_primary, ...
+                        nvox(l), mean(Ypsc_std(:, l)), spm_idx(c), cnames{c}, is_primary, ...
                         con(c, l), t(c, l)}; %#ok<AGROW>
                 end
             end
@@ -136,7 +142,10 @@ if ~exist(gdir, 'dir'); mkdir(gdir); end
 write_tsv(T, fullfile(gdir, stem));
 fprintf('\nOutputs in: %s\n', OUT_ROOT);
 
-plot_profiles(T, ROI_SETS, REGIONS, N_LAYERS, fullfile(gdir, [stem '.png']));
+for ref = {'baseline', '0'}
+    plot_profiles(T, ROI_SETS, REGIONS, N_LAYERS, ref{1}, fullfile(gdir, ...
+        sprintf('task-%s_desc-%sVs%s_layerprofiles.png', TASK, DESC, ref{1})));
+end
 end
 
 
@@ -185,7 +194,7 @@ end
 
 %% ================= FUNCTIONS =================
 
-function [C, names] = make_contrasts(xname)
+function [C, names, spm_idx] = make_contrasts(xname)
 % Same 9 contrasts, same order, as the whole-brain first level
 % (row k = con_000k / spmT_000k):
 %   1 baseline > 0            ('Normally displayed words')
@@ -195,7 +204,7 @@ function [C, names] = make_contrasts(xname)
 % Only bf(1) regressors. Matching '<level>*bf(1)' keeps flip_LR distinct
 % from flip_LRUD.
 p   = numel(xname);
-avg = @(i) full(sparse(1, i, 1 / numel(i), 1, p));
+avg = @(i) full(sparse(1, i, 1 / numel(i), 1, p));   % i = numeric indices
 bf1 = contains(xname, '*bf(1)');
 idx = @(lvl) find(contains(xname, [lvl '*bf(1)']));
 
@@ -211,11 +220,23 @@ for lvl = {'flip_LRUD', 'flip_LR', 'flip_UD', 'spacing_2', 'spacing_4', 'spacing
     C = [C; avg(i) - cb]; %#ok<AGROW>
 end
 
-im = bf1 & contains(xname, 'flip');
-is = bf1 & contains(xname, 'spacing');
+im = find(bf1 & contains(xname, 'flip'));
+is = find(bf1 & contains(xname, 'spacing'));
+assert(~isempty(im) && ~isempty(is), 'flip/spacing regressors not found in SPM.xX.name');
 names(end + (1:2)) = {'mirroring>baseline', 'spacing>baseline'};
 C = [C; avg(im) - cb; avg(is) - cb];
+spm_idx = 1:numel(names);                      % 1..9 = con_000X whole-brain
+
+% contrasti vs baseline implicita (NON presenti nel GLM whole-brain)
+for lvl = {'flip_LRUD', 'flip_LR', 'flip_UD', 'spacing_2', 'spacing_4', 'spacing_6'}
+    names{end + 1} = [lvl{1} '>0']; %#ok<AGROW>
+    C = [C; avg(idx(lvl{1}))]; %#ok<AGROW>
 end
+names(end + (1:2)) = {'mirroring>0', 'spacing>0'};
+C = [C; avg(im); avg(is)];
+spm_idx = [spm_idx, nan(1, numel(names) - numel(spm_idx))];
+end
+
 
 
 function [con, t] = fit_layers(xX, Y, C)
@@ -262,22 +283,37 @@ end
 end
 
 
-function plot_profiles(T, roi_sets, regions, nl, out_png)
+function plot_profiles(T, roi_sets, regions, nl, ref, out_png)
 % Mean +- SEM profiles across subjects: rows = ROI set, columns = region.
 % Each row shows the contrasts of its own ROI set: the primary (defining)
 % contrast in black, its levels in colour.
+sfx = ['>' ref];
+
 SHOW.baseline  = {'baseline'};
-SHOW.mirroring = {'mirroring>baseline', 'flip_LR>baseline', 'flip_UD>baseline', 'flip_LRUD>baseline'};
-SHOW.spacing   = {'spacing>baseline', 'spacing_2>baseline', 'spacing_4>baseline', 'spacing_6>baseline'};
-COLS.baseline  = [0 0 0];
+SHOW.mirroring = strcat({'mirroring', 'flip_LRUD', 'flip_LR', 'flip_UD'}, sfx);
+SHOW.spacing   = strcat({'spacing', 'spacing_2', 'spacing_4', 'spacing_6'}, sfx);
 COLS.mirroring = [0 0 0; 0.99 0.68 0.38; 0.90 0.33 0.05; 0.60 0.15 0.00];
 COLS.spacing   = [0 0 0; 0.55 0.75 0.95; 0.13 0.47 0.80; 0.03 0.25 0.55];
-fig  = figure('Color', 'w', 'Position', [100 100 1150 950]);
-for rs = 1:numel(roi_sets)
+COLS.baseline  = [0 0 0];
+if strcmp(ref, '0')            % baseline > 0 in grigio come riferimento
+    for k = {'mirroring', 'spacing'}
+        SHOW.(k{1})(end + 1) = {'baseline'};
+        COLS.(k{1})(end + 1, :) = [0.6 0.6 0.6];
+    end
+end
+% Nested tiled layouts: one row-layout per ROI set, so each row gets its own
+% legend above it without shrinking any axes (requires MATLAB R2020b+)
+nr   = numel(roi_sets);
+fig  = figure('Color', 'w', 'Position', [100 100 1150 330 * nr + 120]);
+tlo  = tiledlayout(fig, nr, 1, 'TileSpacing', 'loose', 'Padding', 'compact');
+for rs = 1:nr
     show = SHOW.(roi_sets{rs});
     cols = COLS.(roi_sets{rs});
+    trow = tiledlayout(tlo, 1, numel(regions), 'TileSpacing', 'compact', 'Padding', 'none');
+    trow.Layout.Tile = rs;
     for rg = 1:numel(regions)
-        subplot(numel(roi_sets), numel(regions), (rs - 1) * numel(regions) + rg); hold on
+        ax = nexttile(trow); hold(ax, 'on')
+        if rg == 1; ax1 = ax; end
         for c = 1:numel(show)
             sel = strcmp(T.roi_set, roi_sets{rs}) & strcmp(T.region, regions{rg}) & ...
                   strcmp(T.contrast, show{c});
@@ -291,27 +327,32 @@ for rs = 1:numel(roi_sets)
             end
             m  = mean(M, 1, 'omitnan');
             se = std(M, 0, 1, 'omitnan') ./ sqrt(sum(~isnan(M), 1));
-            fill([1:nl, nl:-1:1], [m + se, fliplr(m - se)], cols(c, :), ...
+            fill(ax, [1:nl, nl:-1:1], [m + se, fliplr(m - se)], cols(c, :), ...
                  'FaceAlpha', 0.2, 'EdgeColor', 'none', 'HandleVisibility', 'off');
             lw = 1.2 + 1.0 * (c == 1);                % primary drawn thicker
-            plot(1:nl, m, '-o', 'Color', cols(c, :), 'LineWidth', lw, ...
+            plot(ax, 1:nl, m, '-o', 'Color', cols(c, :), 'LineWidth', lw, ...
                  'MarkerFaceColor', cols(c, :), 'MarkerSize', 4, ...
-                 'DisplayName', strrep(show{c}, '>baseline', ''));
+                 'DisplayName', strrep(show{c}, sfx, ''));
         end
-        yline(0, ':', 'HandleVisibility', 'off');
-        xlim([0.5 nl + 0.5]); xticks(1:nl); box off
-        title(sprintf('%s ROI (%s), deveined', regions{rg}, roi_sets{rs}), 'Interpreter', 'none');
-        if rs == numel(roi_sets); xlabel('layer (1 = WM \rightarrow CSF)'); end
+        yline(ax, 0, ':', 'HandleVisibility', 'off');
+        xlim(ax, [0.5 nl + 0.5]); xticks(ax, 1:nl); box(ax, 'off')
+        title(ax, sprintf('%s ROI (%s), deveined', regions{rg}, roi_sets{rs}), 'Interpreter', 'none');
+        if rs == nr; xlabel(ax, 'layer (1 = WM \rightarrow CSF)'); end
         if rg == 1
-            if strcmp(roi_sets{rs}, 'baseline'); ylabel({'baseline > 0', 'beta (% signal change)'});
-            else; ylabel({'vs baseline', '\Delta beta (% signal change)'}); end
-        end
-        if rg == numel(regions)
-            legend('Location', 'eastoutside', 'Interpreter', 'none', 'Box', 'off');
+            if strcmp(roi_sets{rs}, 'baseline')
+                ylabel(ax, {'baseline > 0', 'beta (% signal change)'});
+            elseif strcmp(ref, '0')
+                ylabel(ax, {'vs implicit baseline', 'beta (% signal change)'});
+            else
+                ylabel(ax, {'vs baseline', '\Delta beta (% signal change)'});
+            end
         end
     end
+    % one horizontal legend per row, centred above the row's three panels
+    lgd = legend(ax1, 'Orientation', 'horizontal', 'Interpreter', 'none', 'Box', 'off');
+    lgd.Layout.Tile = 'north';
 end
-sgtitle(sprintf(['Laminar profiles - deveined BOLD, ROI-wise GLM ' ...
+title(tlo, sprintf(['Laminar profiles - deveined BOLD, ROI-wise GLM ' ...
     '(mean \\pm SEM, N = %d)'], numel(unique(T.subject))), 'FontWeight', 'bold');
 exportgraphics(fig, out_png, 'Resolution', 200);
 fprintf('Figure: %s\n', out_png);

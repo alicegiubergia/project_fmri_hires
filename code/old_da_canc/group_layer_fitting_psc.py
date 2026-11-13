@@ -2,14 +2,18 @@
 Profili laminari per contrasto + modulazione parametrica + distanza
 inter-regionale, in PERCENT SIGNAL CHANGE.
 
-Differenza rispetto alla versione precedente: i profili non sono piu' estratti
-dai con_ grezzi (unita' arbitrarie) ma dalle mappe PSC
+I profili sono in PSC
 
     PSC = 100 * SF * (con / pesi) / mean(beta costanti)
 
-generate e messe in cache da group_layer_plotting_psc.py, che va tenuto nella
-stessa cartella. SF, indici dei beta costanti e normalizzazione dei pesi sono
-letti da SPM.mat per ogni soggetto.
+e NON vengono estratti qui: arrivano dal CSV unico di export_profiles.py
+(creato al volo se manca), lo stesso che usano layer_ff_fb_analysis.py e
+modelli_laminari.r. La metrica di profondita' (equidist/equivol) e' quella di
+group_layer_plotting_psc.py (glp.METHOD); gli output vanno in
+group_layer_parametric_psc/<METHOD>/.
+
+Sostituisce anche group_layer_fitting.py, che differiva solo per la metrica
+equivol scritta a mano nel path: ora basta LAYER_METHOD=equivol.
 
 Struttura dei contrasti:
   con_0001   -> lettura di parole NORMALI > riposo implicito
@@ -27,21 +31,19 @@ Per ogni soggetto x ROI x condizione si ottengono:
 import os
 import itertools
 import numpy as np
-import nibabel as nib
 import matplotlib.pyplot as plt
 
 import group_layer_plotting_psc as glp
+import export_profiles as ep
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-ROOT_DIR = '/mnt/store1/projects/progetto_layer/data/derivatives'
-OUTPUT_DIR = os.path.join(ROOT_DIR, 'group_layer_parametric_psc')
+OUTPUT_DIR = os.path.join(glp.ROOT_DIR, 'group_layer_parametric_psc', glp.OUT_TAG)
 
-SUBJECTS = ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006",
-            "sub-007", "sub-008"]
-ROIS = ["dorsal", "ventral", "visual"]
+SUBJECTS = glp.SUBJECTS
+ROIS = glp.ROIS
 
 BASELINE = 'con_0001'                  # lettura parole normali > riposo
 CONDITIONS = {
@@ -49,10 +51,7 @@ CONDITIONS = {
     'spacing':   ['con_0005', 'con_0006', 'con_0007'],
 }
 
-ROI_KEY_FOR = {
-    'mirroring': 'spmT_0008',
-    'spacing':   'spmT_0009',
-}
+ROI_KEY_FOR = {fam: glp.TASK[fam] for fam in CONDITIONS}   # spmT_0008 / spmT_0009
 
 LEVEL_VALUES = [1, 2, 3]
 
@@ -73,8 +72,7 @@ MOSTRA_BASELINE = True
 # baseline va su un asse secondario a destra, con False sullo stesso asse.
 BASELINE_ASSE_SECONDARIO = False
 
-UPSAMP_SPACING = (0.2, 0.2, 0.2)       # deve coincidere con glp.UPSAMP_SPACING
-NR_LAYERS = 10                          # per i grafici
+NR_LAYERS = glp.NR_LAYERS
 COARSE_EDGES = [0, 3, 7, 10]            # deep / middle / superficial
 COARSE_NAMES = ['deep', 'middle', 'superficial']
 
@@ -110,94 +108,32 @@ def mean_se(arr, axis=0):
 # ESTRAZIONE
 # ============================================================
 
-def load_roi(sub, region, roi_key):
-    """Maschera GM e metrica di profondita', definite una volta sola e
-    identiche per tutti i contrasti."""
-    metric_path = (f'{ROOT_DIR}/layer_fmri/{sub}/'
-                   f'{sub}_con-{roi_key}_label-{region}_metric_equivol.nii')
-    dseg_path = (f'{ROOT_DIR}/rois/{sub}/'
-                 f'{sub}_con-{roi_key}_desc-polishCleaned_'
-                 f'label-{region}_res-up_dseg.nii.gz')
-    if not (os.path.exists(metric_path) and os.path.exists(dseg_path)):
-        print(f"    [WARNING] ROI o metrica mancante: {sub} | {region}")
-        return None
+def tabella_profili(df):
+    """CSV long di export_profiles -> {(sub, famiglia, regione): (base_prof, mat)}.
 
-    mask = nib.load(dseg_path).get_fdata() == 3
-    depth = nib.load(metric_path).get_fdata()[mask]
-    # clip: metric == 1.0 finirebbe in un bin fuori range
-    layer_id = np.clip((depth * NR_LAYERS).astype(int), 0, NR_LAYERS - 1)
-    return mask, layer_id
-
-
-def load_psc_upsampled(sub, con, design):
-    """Mappa PSC upsamplata per un contrasto.
-
-    Delega a group_layer_plotting_psc: la mappa viene calcolata una volta e
-    riusata dalla cache in psc_maps/, quindi i due script condividono
-    esattamente gli stessi valori.
+    base_prof: (NR_LAYERS,) profilo di con_0001 nella ROI della famiglia.
+    mat:       (3, NR_LAYERS) livelli 1..3, nell'ordine di CONDITIONS
+               (export_profiles.LEVELS usa lo stesso ordine).
+    Come nella versione che estraeva da sola: se manca la baseline o uno dei
+    tre livelli, la combinazione soggetto/famiglia/ROI viene saltata.
     """
-    contrast = con.replace('con_', 'spmT_')      # chiave usata da glp.MAPPING
-    try:
-        path = glp.get_subject_psc_upsampled(sub, contrast, design)
-    except Exception as e:
-        print(f"    [WARNING] PSC non disponibile: {sub} | {con} | {e}")
-        return None
-    return nib.load(path).get_fdata()
+    for fam, cons in CONDITIONS.items():
+        attesi = [c.replace('con_', 'spmT_') for c in cons]
+        if attesi != ep.LEVELS[fam]:
+            raise ValueError(f"ordine dei livelli di {fam} diverso da "
+                             f"export_profiles: {attesi} vs {ep.LEVELS[fam]}")
 
-
-def profile_from_map(data, mask, layer_id):
-    """Media per bin di layer. Nessuna soglia, nessun filtro sugli zeri."""
-    # Resamplare a uno spacing non garantisce la stessa griglia della dseg
-    # se il FOV di partenza differisce: senza questo controllo il masking
-    # sarebbe silenziosamente sbagliato.
-    if data.shape != mask.shape:
-        raise ValueError(f"griglie non allineate: PSC {data.shape} vs "
-                         f"maschera {mask.shape}")
-    vals = data[mask]
-    ok = np.isfinite(vals)
-    prof = np.full(NR_LAYERS, np.nan)
-    for i in range(NR_LAYERS):
-        sel = (layer_id == i) & ok
-        if sel.any():
-            prof[i] = np.mean(vals[sel])
-    return prof
-
-
-def condition_profiles(sub, region, cond, roi_key, design):
-    """Lettura normale e i tre livelli, estratti DENTRO la stessa ROI.
-
-    In modalita' 'roi_scalar' le mappe contengono il solo numeratore del PSC:
-    la divisione per il segnale di base della ROI avviene qui, dopo aver
-    costruito i profili, con un unico scalare per (soggetto, ROI).
-    """
-    roi = load_roi(sub, region, roi_key)
-    if roi is None:
-        return None
-    mask, layer_id = roi
-
-    scale = 1.0
-    if glp.DENOMINATOR_MODE == 'roi_scalar':
-        dseg_path = (f'{ROOT_DIR}/rois/{sub}/'
-                     f'{sub}_con-{roi_key}_desc-polishCleaned_'
-                     f'label-{region}_res-up_dseg.nii.gz')
-        scale = glp.roi_scalar_denominator(sub, dseg_path, design)
-        if not np.isfinite(scale) or scale <= 0:
-            print(f"    [WARNING] denominatore di ROI non valido: "
-                  f"{sub} | {region} ({scale})")
-            return None
-
-    base_map = load_psc_upsampled(sub, BASELINE, design)
-    if base_map is None:
-        return None
-    base_prof = profile_from_map(base_map, mask, layer_id) / scale
-
-    rows = []
-    for con in CONDITIONS[cond]:
-        m = load_psc_upsampled(sub, con, design)
-        if m is None:
-            return None
-        rows.append(profile_from_map(m, mask, layer_id) / scale)
-    return base_prof, np.array(rows)
+    out = {}
+    for (sub, fam, region), g in df.groupby(['subject', 'family', 'region']):
+        base = g[g['condition'] == 'baseline']
+        lv = g[g['condition'] == 'livello']
+        livelli = [lv[lv['level'] == k] for k in range(1, len(CONDITIONS[fam]) + 1)]
+        if base.empty or any(x.empty for x in livelli):
+            continue
+        base_prof, _ = ep.profilo(base)
+        mat = np.array([ep.profilo(x)[0] for x in livelli])
+        out[(sub, fam, region)] = (base_prof, mat)
+    return out
 
 
 # ============================================================
@@ -317,13 +253,12 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 bins = np.arange(1, NR_LAYERS + 1)
 PAIRS = list(itertools.combinations(ROIS, 2))
 
-if tuple(UPSAMP_SPACING) != tuple(glp.UPSAMP_SPACING):
-    raise ValueError(f"UPSAMP_SPACING {UPSAMP_SPACING} diverso da quello di "
-                     f"glp {glp.UPSAMP_SPACING}: le mappe PSC in cache non "
-                     "sarebbero sulla griglia attesa.")
-
 # SF, beta costanti e pesi dei contrasti (letti da SPM.mat, per soggetto)
 design = glp.load_design()
+
+# Profili dal CSV unico (lo crea se manca)
+print(f"\nMetrica: {glp.OUT_TAG}")
+PROFILI = tabella_profili(ep.carica_o_estrai(design))
 
 # Quale condizione sperimentale sta dietro a ciascun 'livello': le etichette
 # level1/2/3 nelle figure seguono l'ordine di CONDITIONS, non un ordine
@@ -352,7 +287,7 @@ for sub in SUBJECTS:
     for region in ROIS:
         for cond in CONDITIONS:
             roi_key = ROI_KEY_FOR[cond]
-            got = condition_profiles(sub, region, cond, roi_key, design)
+            got = PROFILI.get((sub, cond, region))
             if got is None:
                 print(f"  [SKIP] {sub} | {region} | {cond}")
                 continue
@@ -380,7 +315,7 @@ for sub in SUBJECTS:
 # ------------------------------------------------------------------
 # tabella per-contrasto: profilo coarse, FF/FB, forma laminare
 # ------------------------------------------------------------------
-with open(os.path.join(OUTPUT_DIR, f'profile_scores_psc_{glp.DENOMINATOR_MODE}.csv'), 'w') as f:
+with open(os.path.join(OUTPUT_DIR, f'profile_scores_psc_{glp.OUT_TAG}.csv'), 'w') as f:
     f.write("subject,condition,roi,roi_key,profile_type,"
             "deep,middle,superficial,FF,FB,linear,quadratic\n")
     for sub in SUBJECTS:
@@ -420,7 +355,7 @@ for sub in SUBJECTS:
                     dist_rows.append((sub, cond, ptype, res, a, b, d_raw, d_dem))
                     agg.setdefault((cond, ptype, res, (a, b)), []).append(d_dem)
 
-with open(os.path.join(OUTPUT_DIR, f'interregional_distance_psc_{glp.DENOMINATOR_MODE}.csv'), 'w') as f:
+with open(os.path.join(OUTPUT_DIR, f'interregional_distance_psc_{glp.OUT_TAG}.csv'), 'w') as f:
     f.write("subject,condition,profile_type,resolution,roi_a,roi_b,"
             "cos_dist_raw,cos_dist_demeaned\n")
     for row in dist_rows:
@@ -519,7 +454,7 @@ for res in ('10bin', '3bin'):
 
         ax.axhline(1.0, color='k', lw=0.8, ls=':')   # profili scorrelati
         ax.set_ylabel("1 - r  (distanza coseno, profili centrati)")
-        ax.set_title(f"Dissimilarita' laminare inter-regionale: {cond} [{res}]",
+        ax.set_title(f"Dissimilarita' laminare inter-regionale: {cond} [{res}, {glp.OUT_TAG}]",
                      fontsize=12, fontweight='bold')
         ax.grid(True, axis='y', ls='--', alpha=0.4)
         ax.legend(loc='best', frameon=True)
@@ -563,7 +498,7 @@ for res in ('10bin', '3bin'):
         ax.grid(True, axis='y', ls='--', alpha=0.4)
     axes[0].set_ylabel("1 - r  (distanza coseno, profili centrati)")
     fig.suptitle(f"Dissimilarita' laminare inter-regionale durante la "
-                 f"lettura normale [{res}]", fontsize=12, fontweight='bold')
+                 f"lettura normale [{res}, {glp.OUT_TAG}]", fontsize=12, fontweight='bold')
     fig.tight_layout()
     fig.savefig(os.path.join(OUTPUT_DIR,
                 f'interregional_readnormal_{res}.png'), dpi=300)
@@ -592,7 +527,7 @@ for cond in CONDITIONS:
     ax.set_xlabel("Bin di layer (1=WM, 10=CSF)")
     ax.set_ylabel("Percent signal change (%)\nlettura parole normali > riposo")
     ax.set_title(f"Profilo della lettura normale nella ROI di {cond} "
-                 f"[{ROI_KEY_FOR[cond]}]", fontsize=12, fontweight='bold')
+                 f"[{ROI_KEY_FOR[cond]}, {glp.OUT_TAG}]", fontsize=12, fontweight='bold')
     ax.grid(True, ls='--', alpha=0.4)
     ax.legend(loc='best', frameon=True)
     fig.tight_layout()
@@ -674,7 +609,7 @@ for cond in CONDITIONS:
                        + (' (asse dx)' if BASELINE_ASSE_SECONDARIO else '')]
     axes[-1].legend(h, l, loc='best', frameon=True, fontsize=8)
  
-    fig.suptitle(f"Profilo laminare per livello di {cond}",
+    fig.suptitle(f"Profilo laminare per livello di {cond} [{glp.OUT_TAG}]",
                  fontsize=12, fontweight='bold')
     fig.tight_layout()
     fig.savefig(os.path.join(OUTPUT_DIR, f'profiles_{cond}.png'), dpi=300)
@@ -703,7 +638,7 @@ for cond in CONDITIONS:
     ax.set_xticks(bins)
     ax.set_xlabel("Bin di layer (1=WM, 10=CSF)")
     ax.set_ylabel("Pendenza parametrica ($\\Delta$ PSC % per livello)")
-    ax.set_title(f"Modulazione parametrica: {cond}",
+    ax.set_title(f"Modulazione parametrica: {cond} [{glp.OUT_TAG}]",
                  fontsize=12, fontweight='bold')
     ax.grid(True, ls='--', alpha=0.4)
     ax.legend(loc='best', frameon=True)
@@ -712,5 +647,5 @@ for cond in CONDITIONS:
                 f'parametric_slope_{cond}.png'), dpi=300)
     plt.close(fig)
 
-print(f"\nModalita' denominatore: {glp.DENOMINATOR_MODE}")
+print(f"\nMetrica: {glp.METHOD}")
 print(f"Output in: {OUTPUT_DIR}")

@@ -1,74 +1,82 @@
 """
-Profili laminari per contrasto + modulazione parametrica + distanza
-inter-regionale, in PERCENT SIGNAL CHANGE.
+03 - Profiles per level + parametric modulation + inter-regional distance,
+in PERCENT SIGNAL CHANGE.
 
-Differenza rispetto alla versione precedente: i profili non sono piu' estratti
-dai con_ grezzi (unita' arbitrarie) ma dalle mappe PSC
+Profiles are in PSC
 
-    PSC = 100 * SF * (con / pesi) / mean(beta costanti)
+    PSC = 100 * SF * (con / weights) / mean(constant betas)
 
-generate e messe in cache da group_layer_plotting_psc.py, che va tenuto nella
-stessa cartella. SF, indici dei beta costanti e normalizzazione dei pesi sono
-letti da SPM.mat per ogni soggetto.
+and are NOT extracted here: they come from the single CSV of 01_export_profiles.py
+(created on the fly if missing), the same one used by 04_laminar_models.R and
+05_ff_fb_compartments.py.
 
-Struttura dei contrasti:
-  con_0001   -> lettura di parole NORMALI > riposo implicito
-  con_0002..0004 -> parole con mirroring > parole normali (3 livelli)
-  con_0005..0007 -> parole con spacing   > parole normali (3 livelli)
+Output: <ROOT_DIR>/laminar_psc/<METHOD>/03_level_profiles/
+Usage:  [LAYER_METHOD=equivol] python 03_level_profiles.py
 
-Per ogni soggetto x ROI x condizione si ottengono:
-  'read_normal' -> profilo di con_0001 (lettura normale), in PSC
-  'level1..3'   -> profilo di ciascuno dei tre contrasti di livello, in Delta PSC
-  'slope'       -> profilo della pendenza parametrica sui tre livelli
-                   (non e' un contrasto SPM, e' derivato) -- calcolato SOLO
-                   per le famiglie ordinali, vedi PARAMETRIC_FAMILIES
+Contrast structure:
+  con_0001   -> reading of NORMAL words > implicit rest
+  con_0002..0004 -> mirrored words > normal words (3 levels)
+  con_0005..0007 -> spaced words   > normal words (3 levels)
+
+For each subject x ROI x condition we get:
+  'read_normal' -> profile of con_0001 (normal reading), in PSC
+  'level1..3'   -> profile of each of the three level contrasts, in Delta PSC
+  'slope'       -> profile of the parametric slope over the three levels
+                   (not an SPM contrast, it is derived) -- computed ONLY
+                   for the families listed in PARAMETRIC_FAMILIES
 """
 
 import os
 import itertools
 import numpy as np
-import nibabel as nib
 import matplotlib.pyplot as plt
 
-import group_layer_plotting_psc as glp
+import laminar_psc as lps
 
 # ============================================================
 # CONFIG
 # ============================================================
 
-ROOT_DIR = '/mnt/store1/projects/progetto_layer/data/derivatives'
-OUTPUT_DIR = os.path.join(ROOT_DIR, 'group_layer_parametric_psc')
+OUTPUT_DIR = lps.step_dir('03_level_profiles')
 
-SUBJECTS = ["sub-001", "sub-002", "sub-003", "sub-004", "sub-005", "sub-006",
-            "sub-007", "sub-008"]
-ROIS = ["dorsal", "ventral", "visual"]
+SUBJECTS = lps.SUBJECTS
+ROIS = lps.ROIS
 
-BASELINE = 'con_0001'                  # lettura parole normali > riposo
+BASELINE = 'con_0001'                  # normal word reading > rest
 CONDITIONS = {
     'mirroring': ['con_0002', 'con_0003', 'con_0004'],
     'spacing':   ['con_0005', 'con_0006', 'con_0007'],
 }
 
-ROI_KEY_FOR = {
-    'mirroring': 'spmT_0008',
-    'spacing':   'spmT_0009',
-}
+ROI_KEY_FOR = {fam: lps.TASK[fam] for fam in CONDITIONS}   # spmT_0008 / spmT_0009
 
 LEVEL_VALUES = [1, 2, 3]
 
-# Il profilo 'slope' assume che i tre livelli siano una progressione ORDINATA
-# della stessa manipolazione. Per lo spacing e' vero (2 < 4 < 6). Per il
-# mirroring flip_LR e flip_UD sono qualitativamente diversi, quindi la
-# "pendenza" va letta per quello che e' (vedi parametric_slopes): con tre
-# livelli e x centrata, coincide con (livello3 - livello1)/2, cioe' un
-# contrasto fra il primo e il terzo dei con_ elencati in CONDITIONS, che
-# ignora il livello centrale. Qui la teniamo per entrambe le famiglie.
+# The 'slope' profile assumes that the three levels are an ORDERED progression
+# of the same manipulation. For spacing this holds (2 < 4 < 6). For
+# mirroring, flip_LR and flip_UD are qualitatively different, so the
+# "slope" must be read for what it is (see parametric_slopes): with three
+# levels and centred x, it equals (level3 - level1)/2, i.e. a contrast
+# between the first and the third con_ listed in CONDITIONS, which ignores
+# the middle level. Here we keep it for both families.
 PARAMETRIC_FAMILIES = ['mirroring', 'spacing']
 
-UPSAMP_SPACING = (0.2, 0.2, 0.2)       # deve coincidere con glp.UPSAMP_SPACING
-NR_LAYERS = 10                          # per i grafici
-COARSE_EDGES = [0, 3, 7, 10]            # deep / middle / superficial
+# In the per-level profile figures, overlay in black the profile of normal
+# word reading (con_0001), extracted in the ROI of the family.
+SHOW_BASELINE = True
+# The levels are Delta PSC relative to normal reading, the baseline is PSC
+# relative to rest: the two quantities have very different scales. With True
+# the baseline goes on a secondary axis on the right, with False on the same axis.
+BASELINE_SECONDARY_AXIS = False
+
+NR_LAYERS = lps.NR_LAYERS
+# Compartments from laminar_psc.py (deep 1-4, middle 5-6, superficial 7-10),
+# converted to slice edges on 0-based bins: [0, 4, 6, 10].
 COARSE_NAMES = ['deep', 'middle', 'superficial']
+COARSE_EDGES = [0] + [max(lps.COMPARTMENTS[c]) for c in COARSE_NAMES]
+assert all(lps.COMPARTMENTS[c] == list(range(a + 1, b + 1))
+           for c, a, b in zip(COARSE_NAMES, COARSE_EDGES[:-1], COARSE_EDGES[1:])), \
+    "compartments must be contiguous bins in the order deep, middle, superficial"
 
 PROFILE_TYPES = ['read_normal', 'level1', 'level2', 'level3', 'slope']
 
@@ -87,8 +95,8 @@ COLOR_PAIR = {('dorsal', 'ventral'): '#d1495b',
 # ============================================================
 
 def mean_se(arr, axis=0):
-    """Media e SE ignorando i NaN, con n = numero di valori effettivamente
-    finiti lungo l'asse (non il numero nominale di soggetti)."""
+    """Mean and SE ignoring NaNs, with n = number of values that are actually
+    finite along the axis (not the nominal number of subjects)."""
     arr = np.asarray(arr, dtype=float)
     m = np.nanmean(arr, axis=axis)
     n = np.sum(np.isfinite(arr), axis=axis).astype(float)
@@ -99,113 +107,51 @@ def mean_se(arr, axis=0):
 
 
 # ============================================================
-# ESTRAZIONE
+# EXTRACTION
 # ============================================================
 
-def load_roi(sub, region, roi_key):
-    """Maschera GM e metrica di profondita', definite una volta sola e
-    identiche per tutti i contrasti."""
-    metric_path = (f'{ROOT_DIR}/layer_fmri/{sub}/'
-                   f'{sub}_con-{roi_key}_label-{region}_metric_equivol.nii')
-    dseg_path = (f'{ROOT_DIR}/rois/{sub}/'
-                 f'{sub}_con-{roi_key}_desc-polishCleaned_'
-                 f'label-{region}_res-up_dseg.nii.gz')
-    if not (os.path.exists(metric_path) and os.path.exists(dseg_path)):
-        print(f"    [WARNING] ROI o metrica mancante: {sub} | {region}")
-        return None
+def profiles_table(df):
+    """Single long CSV -> {(sub, family, region): (base_prof, mat)}.
 
-    mask = nib.load(dseg_path).get_fdata() == 3
-    depth = nib.load(metric_path).get_fdata()[mask]
-    # clip: metric == 1.0 finirebbe in un bin fuori range
-    layer_id = np.clip((depth * NR_LAYERS).astype(int), 0, NR_LAYERS - 1)
-    return mask, layer_id
-
-
-def load_psc_upsampled(sub, con, design):
-    """Mappa PSC upsamplata per un contrasto.
-
-    Delega a group_layer_plotting_psc: la mappa viene calcolata una volta e
-    riusata dalla cache in psc_maps/, quindi i due script condividono
-    esattamente gli stessi valori.
+    base_prof: (NR_LAYERS,) profile of con_0001 in the ROI of the family.
+    mat:       (3, NR_LAYERS) levels 1..3, in the order of CONDITIONS
+               (laminar_psc.LEVELS uses the same order).
+    As in the version that did its own extraction: if the baseline or one of
+    the three levels is missing, the subject/family/ROI combination is skipped.
     """
-    contrast = con.replace('con_', 'spmT_')       # chiave usata da glp.MAPPING
-    try:
-        path = glp.get_subject_psc_upsampled(sub, contrast, design)
-    except Exception as e:
-        print(f"    [WARNING] PSC non disponibile: {sub} | {con} | {e}")
-        return None
-    return nib.load(path).get_fdata()
+    for fam, cons in CONDITIONS.items():
+        expected = [c.replace('con_', 'spmT_') for c in cons]
+        if expected != lps.LEVELS[fam]:
+            raise ValueError(f"order of the {fam} levels differs from "
+                             f"laminar_psc.LEVELS: {expected} vs {lps.LEVELS[fam]}")
 
-
-def profile_from_map(data, mask, layer_id):
-    """Media per bin di layer. Nessuna soglia, nessun filtro sugli zeri."""
-    # Resamplare a uno spacing non garantisce la stessa griglia della dseg
-    # se il FOV di partenza differisce: senza questo controllo il masking
-    # sarebbe silenziosamente sbagliato.
-    if data.shape != mask.shape:
-        raise ValueError(f"griglie non allineate: PSC {data.shape} vs "
-                         f"maschera {mask.shape}")
-    vals = data[mask]
-    ok = np.isfinite(vals)
-    prof = np.full(NR_LAYERS, np.nan)
-    for i in range(NR_LAYERS):
-        sel = (layer_id == i) & ok
-        if sel.any():
-            prof[i] = np.mean(vals[sel])
-    return prof
-
-
-def condition_profiles(sub, region, cond, roi_key, design):
-    """Lettura normale e i tre livelli, estratti DENTRO la stessa ROI.
-
-    In modalita' 'roi_scalar' le mappe contengono il solo numeratore del PSC:
-    la divisione per il segnale di base della ROI avviene qui, dopo aver
-    costruito i profili, con un unico scalare per (soggetto, ROI).
-    """
-    roi = load_roi(sub, region, roi_key)
-    if roi is None:
-        return None
-    mask, layer_id = roi
-
-    scale = 1.0
-    if glp.DENOMINATOR_MODE == 'roi_scalar':
-        dseg_path = (f'{ROOT_DIR}/rois/{sub}/'
-                     f'{sub}_con-{roi_key}_desc-polishCleaned_'
-                     f'label-{region}_res-up_dseg.nii.gz')
-        scale = glp.roi_scalar_denominator(sub, dseg_path, design)
-        if not np.isfinite(scale) or scale <= 0:
-            print(f"    [WARNING] denominatore di ROI non valido: "
-                  f"{sub} | {region} ({scale})")
-            return None
-
-    base_map = load_psc_upsampled(sub, BASELINE, design)
-    if base_map is None:
-        return None
-    base_prof = profile_from_map(base_map, mask, layer_id) / scale
-
-    rows = []
-    for con in CONDITIONS[cond]:
-        m = load_psc_upsampled(sub, con, design)
-        if m is None:
-            return None
-        rows.append(profile_from_map(m, mask, layer_id) / scale)
-    return base_prof, np.array(rows)
+    out = {}
+    for (sub, fam, region), g in df.groupby(['subject', 'family', 'region']):
+        base = g[g['condition'] == 'baseline']
+        lv = g[g['condition'] == 'level']
+        levels_list = [lv[lv['level'] == k] for k in range(1, len(CONDITIONS[fam]) + 1)]
+        if base.empty or any(x.empty for x in levels_list):
+            continue
+        base_prof, _ = lps.profile_from_rows(base)
+        mat = np.array([lps.profile_from_rows(x)[0] for x in levels_list])
+        out[(sub, fam, region)] = (base_prof, mat)
+    return out
 
 
 # ============================================================
-# STATISTICHE
+# STATISTICS
 # ============================================================
 
 def coarsen(prof10):
-    """Da 10 bin a 3 (deep / middle / superficial)."""
+    """From 10 bins to 3 (deep / middle / superficial)."""
     return np.array([np.nanmean(prof10[..., a:b], axis=-1)
                      for a, b in zip(COARSE_EDGES[:-1], COARSE_EDGES[1:])]).T
 
 
 def parametric_slopes(levels_by_layer, level_values):
     """
-    Pendenza lineare dell'attivazione sui livelli, per ogni layer.
-    Input (n_levels, n_layers) -> output (n_layers,), in % per livello.
+    Linear slope of activation over levels, for each layer.
+    Input (n_levels, n_layers) -> output (n_layers,), in % per level.
     """
     x = np.asarray(level_values, dtype=float)
     x = x - x.mean()
@@ -214,9 +160,9 @@ def parametric_slopes(levels_by_layer, level_values):
 
 def profile_set(base_prof, mat, cond):
     """
-    Un vettore di profilo per ogni contrasto -- niente medie fra livelli --
-    piu' il profilo derivato della pendenza parametrica, solo dove la
-    progressione dei livelli e' ordinata.
+    One profile vector per contrast -- no averaging across levels --
+    plus the derived parametric-slope profile, only where the progression
+    of levels is ordered.
     """
     d = {'read_normal': np.asarray(base_prof, dtype=float)}
     for i in range(mat.shape[0]):
@@ -231,21 +177,21 @@ def profile_set(base_prof, mat, cond):
 
 def laminar_shape(prof):
     """
-    Come un profilo cambia lungo la profondita': fit b0 + b1*d + b2*d^2.
+    How a profile changes across depth: fit b0 + b1*d + b2*d^2.
 
-    Su un profilo di livello (che e' una DIFFERENZA rispetto alla lettura
-    normale) questi termini descrivono la forma del reclutamento AGGIUNTIVO,
-    non dell'attivazione totale.
+    On a level profile (which is a DIFFERENCE relative to normal reading)
+    these terms describe the shape of the ADDITIONAL recruitment, not of
+    the total activation.
 
-    b1 positivo = piu' segnale in superficie. E' il termine piu' esposto al
-    drenaggio venoso residuo -- pero' su un contrasto differenziale il
-    guadagno vascolare comune si cancella al primo ordine, quindi qui e'
-    meno pericoloso che su read_normal.
-    b2 positivo = profilo a U, layer medi risparmiati rispetto a
-    superficiali e profondi: firma attesa del feedback. Negativo =
-    concentrazione nei layer medi, firma feedforward. Il leakage riempie
-    l'avvallamento centrale, quindi lavora CONTRO un b2 positivo: trovarlo
-    e' conservativo.
+    positive b1 = more signal at the surface. It is the term most exposed to
+    residual venous draining -- but on a differential contrast the common
+    vascular gain cancels at first order, so here it is less dangerous than
+    on read_normal.
+    positive b2 = U-shaped profile, middle layers spared relative to
+    superficial and deep: the expected feedback signature. Negative =
+    concentration in the middle layers, feedforward signature. Leakage fills
+    the central dip, so it works AGAINST a positive b2: finding one is
+    conservative.
     """
     d = np.arange(len(prof), dtype=float)
     d = (d - d.mean()) / d.std()
@@ -259,11 +205,11 @@ def laminar_shape(prof):
 
 def ff_fb_scores(prof10):
     """
-    Punteggi dello schema originale, sul profilo coarse.
-      FF = middle - (superficial + deep)/2   -> picco nei layer medi
-      FB = deep - superficial                -> sbilanciamento verso il basso
-    In PSC questi punteggi sono in punti percentuali e diventano
-    confrontabili tra soggetti, cosa che in unita' arbitrarie non erano.
+    Scores of the original scheme, on the coarse profile.
+      FF = middle - (superficial + deep)/2   -> peak in the middle layers
+      FB = deep - superficial                -> imbalance towards depth
+    In PSC these scores are in percentage points and become comparable
+    across subjects, which they were not in arbitrary units.
     """
     c = coarsen(np.asarray(prof10, dtype=float))
     deep, mid, sup = c[0], c[1], c[2]
@@ -272,19 +218,19 @@ def ff_fb_scores(prof10):
 
 def cosine_distance(u, v, demean):
     """
-    1 - cos(u, v) sui bin finiti in ENTRAMBI i profili.
+    1 - cos(u, v) over the bins that are finite in BOTH profiles.
 
-    demean=False -> vettori grezzi. Include la componente costante: se
-        entrambe le ROI hanno segnale mediamente positivo la distanza resta
-        piccola qualunque sia la forma.
-    demean=True  -> vettori centrati; equivale a 1 - r di Pearson, range
-        [0, 2]. E' la misura di FORMA.
+    demean=False -> raw vectors. Includes the constant component: if both
+        ROIs have an on-average positive signal the distance stays small
+        whatever the shape.
+    demean=True  -> centred vectors; equivalent to 1 - Pearson r, range
+        [0, 2]. It is the SHAPE measure.
 
-    Nota sul passaggio al PSC: la versione demeaned e' invariante a un
-    fattore di scala costante per ROI, quindi cambia SOLO nella misura in cui
-    il denominatore del PSC ha un andamento lungo la profondita' corticale.
-    Se la diagnostica di glp (diagnostic_psc_denominator.png) mostra un
-    denominatore piatto, queste figure saranno quasi identiche a prima.
+    Note on the switch to PSC: the demeaned version is invariant to a
+    constant scale factor per ROI, so it changes ONLY to the extent that
+    the PSC denominator has a trend across cortical depth.
+    If the diagnostics of 02_contrast_profiles.py (diagnostic_psc_denominator.png) show a
+    flat denominator, these figures will be nearly identical to the previous ones.
     """
     u = np.asarray(u, dtype=float)
     v = np.asarray(v, dtype=float)
@@ -309,19 +255,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 bins = np.arange(1, NR_LAYERS + 1)
 PAIRS = list(itertools.combinations(ROIS, 2))
 
-if tuple(UPSAMP_SPACING) != tuple(glp.UPSAMP_SPACING):
-    raise ValueError(f"UPSAMP_SPACING {UPSAMP_SPACING} diverso da quello di "
-                     f"glp {glp.UPSAMP_SPACING}: le mappe PSC in cache non "
-                     "sarebbero sulla griglia attesa.")
+# SF, constant betas and contrast weights (read from SPM.mat, per subject)
+design = lps.load_design()
 
-# SF, beta costanti e pesi dei contrasti (letti da SPM.mat, per soggetto)
-design = glp.load_design()
+# Profiles from the single CSV (created if missing)
+print(f"\nMetric: {lps.METHOD}")
+PROFILES = profiles_table(lps.load_or_extract(design))
 
-# Quale condizione sperimentale sta dietro a ciascun 'livello': le etichette
-# level1/2/3 nelle figure seguono l'ordine di CONDITIONS, non un ordine
-# sperimentale, quindi conviene averlo scritto.
-_colmap = glp.parse_column_conditions(design['info'])
-print("\nCorrispondenza livelli -> condizioni:")
+# Which experimental condition is behind each 'level': the level1/2/3
+# labels in the figures follow the order of CONDITIONS, not an experimental
+# order, so it is worth printing it.
+_colmap = lps.parse_column_conditions(design['info'])
+print("\nLevels -> conditions:")
 for cond, cons in CONDITIONS.items():
     labels = []
     for k, con in enumerate(cons, start=1):
@@ -332,7 +277,7 @@ for cond, cons in CONDITIONS.items():
         labels.append(f"level{k}={con}={'+'.join(pos) if pos else '?'}")
     print(f"  {cond:10s}: " + "  ".join(labels))
 
-# aggregato per (condizione, ROI), per le figure di gruppo
+# aggregated per (condition, ROI), for the group figures
 results = {(c, r): {'levels': [], 'slopes': [], 'read_normal': [], 'subs': []}
            for c in CONDITIONS for r in ROIS}
 # by_sub[sub][cond][region] = {'read_normal':(10,), 'level1':(10,), ..., 'slope':(10,)}
@@ -344,7 +289,7 @@ for sub in SUBJECTS:
     for region in ROIS:
         for cond in CONDITIONS:
             roi_key = ROI_KEY_FOR[cond]
-            got = condition_profiles(sub, region, cond, roi_key, design)
+            got = PROFILES.get((sub, cond, region))
             if got is None:
                 print(f"  [SKIP] {sub} | {region} | {cond}")
                 continue
@@ -366,13 +311,13 @@ for sub in SUBJECTS:
             else:
                 lin1, quad1 = laminar_shape(pset['level1'])
                 print(f"  {region:8s} {cond:10s} [{roi_key}] "
-                      f"(non parametrico) level1: lin={lin1:+.4f} "
+                      f"(non-parametric) level1: lin={lin1:+.4f} "
                       f"quad={quad1:+.4f}")
 
 # ------------------------------------------------------------------
-# tabella per-contrasto: profilo coarse, FF/FB, forma laminare
+# per-contrast table: coarse profile, FF/FB, laminar shape
 # ------------------------------------------------------------------
-with open(os.path.join(OUTPUT_DIR, f'profile_scores_psc_{glp.DENOMINATOR_MODE}.csv'), 'w') as f:
+with open(os.path.join(OUTPUT_DIR, f'profile_scores_{lps.METHOD}.csv'), 'w') as f:
     f.write("subject,condition,roi,roi_key,profile_type,"
             "deep,middle,superficial,FF,FB,linear,quadratic\n")
     for sub in SUBJECTS:
@@ -390,9 +335,9 @@ with open(os.path.join(OUTPUT_DIR, f'profile_scores_psc_{glp.DENOMINATOR_MODE}.c
                             f"{ff:.6f},{fb:.6f},{lin:.6f},{quad:.6f}\n")
 
 # ------------------------------------------------------------------
-# distanze inter-regionali, per contrasto
+# inter-regional distances, per contrast
 # ------------------------------------------------------------------
-# agg[(cond, ptype, res, pair)] = lista di distanze demeaned (una per sub)
+# agg[(cond, ptype, res, pair)] = list of demeaned distances (one per sub)
 agg = {}
 dist_rows = []
 
@@ -412,13 +357,13 @@ for sub in SUBJECTS:
                     dist_rows.append((sub, cond, ptype, res, a, b, d_raw, d_dem))
                     agg.setdefault((cond, ptype, res, (a, b)), []).append(d_dem)
 
-with open(os.path.join(OUTPUT_DIR, f'interregional_distance_psc_{glp.DENOMINATOR_MODE}.csv'), 'w') as f:
+with open(os.path.join(OUTPUT_DIR, f'interregional_distance_{lps.METHOD}.csv'), 'w') as f:
     f.write("subject,condition,profile_type,resolution,roi_a,roi_b,"
             "cos_dist_raw,cos_dist_demeaned\n")
     for row in dist_rows:
         f.write("{},{},{},{},{},{},{:.6f},{:.6f}\n".format(*row))
-    # Distanze sui profili MEDI di gruppo: corrispondono alle figure ma
-    # non sono osservazioni indipendenti e non hanno SE. Solo descrittive.
+    # Distances on the group MEAN profiles: they match the figures but are
+    # not independent observations and have no SE. Descriptive only.
     for cond in CONDITIONS:
         for ptype in PROFILE_TYPES:
             grp = {}
@@ -436,7 +381,7 @@ with open(os.path.join(OUTPUT_DIR, f'interregional_distance_psc_{glp.DENOMINATOR
                             f"{cosine_distance(va, vb, False):.6f},"
                             f"{cosine_distance(va, vb, True):.6f}\n")
 
-print("\n--- distanza coseno inter-regionale, 10 bin, demeaned ---")
+print("\n--- inter-regional cosine distance, 10 bins, demeaned ---")
 for cond in CONDITIONS:
     for a, b in PAIRS:
         line = f"  {cond:10s} {a:8s} vs {b:8s} |"
@@ -450,27 +395,27 @@ for cond in CONDITIONS:
             line += f" {ptype}={m:.3f}+/-{se:.3f}"
         print(line)
 
-# --- figura 1: distanza sui tre LIVELLI, con la pendenza staccata ---
-# La linea continua congiunge solo level1-2-3. Per lo spacing questa e' una
-# progressione ordinata di degradazione: se la distanza cresce lungo l'asse,
-# la divergenza fra ROI e' guidata dalla manipolazione. Per il mirroring i
-# tre punti sono condizioni distinte e l'asse NON e' ordinato: la linea li
-# congiunge solo per leggibilita', la sua pendenza non significa nulla.
-# La pendenza parametrica compare solo per le famiglie ordinali.
+# --- figure 1: distance over the three LEVELS, with the slope set apart ---
+# The solid line only joins level1-2-3. For spacing this is an ordered
+# progression of degradation: if the distance grows along the axis, the
+# divergence between ROIs is driven by the manipulation. For mirroring the
+# three points are distinct conditions and the axis is NOT ordered: the line
+# joins them only for readability, its slope means nothing.
+# The parametric slope is shown only for the families in PARAMETRIC_FAMILIES.
 
 for res in ('10bin', '3bin'):
     for cond in CONDITIONS:
         show_slope = cond in PARAMETRIC_FAMILIES
         fig, ax = plt.subplots(figsize=(8.5, 5))
         xs = np.arange(len(LEVEL_ORDER))
-        x_slope = len(LEVEL_ORDER) + 0.6          # dopo il separatore
+        x_slope = len(LEVEL_ORDER) + 0.6          # after the separator
 
         PAIR_DODGE = 0.34
         JITTER = 0.045
         for pi, pair in enumerate(PAIRS):
             c = COLOR_PAIR.get(pair, 'black')
 
-            # tre livelli: linea continua
+            # three levels: solid line
             mat = np.full((len(LEVEL_ORDER), len(SUBJECTS)), np.nan)
             for i, pt in enumerate(LEVEL_ORDER):
                 v = agg.get((cond, pt, res, pair), [])
@@ -483,7 +428,7 @@ for res in ('10bin', '3bin'):
             for j in range(mat.shape[1]):
                 ax.plot(xs, mat[:, j], color=c, alpha=0.15, lw=0.8, zorder=0)
 
-            # pendenza: punto isolato, stessa scala ma nessuna linea
+            # slope: isolated point, same scale but no line
             if show_slope:
                 v = np.array(agg.get((cond, SLOPE_KEY, res, pair), []),
                              dtype=float)
@@ -497,21 +442,21 @@ for res in ('10bin', '3bin'):
                                 capsize=5, color=c, zorder=2)
 
         if show_slope:
-            # separatore: marca il cambio di tipo di quantita'
+            # separator: marks the change of quantity
             ax.axvline(len(LEVEL_ORDER) - 0.4, color='0.6', lw=1.2, ls='-')
             ax.set_xticks(list(xs) + [x_slope])
-            ax.set_xticklabels(LEVEL_ORDER + ['pendenza\n(derivata)'])
+            ax.set_xticklabels(LEVEL_ORDER + ['slope\n(derived)'])
             ax.set_xlim(-0.4, x_slope + 0.5)
-            ax.set_xlabel("Livello di degradazione")
+            ax.set_xlabel("Degradation level")
         else:
             ax.set_xticks(list(xs))
             ax.set_xticklabels(LEVEL_ORDER)
             ax.set_xlim(-0.4, len(LEVEL_ORDER) - 0.6)
-            ax.set_xlabel("Condizione (asse non ordinato)")
+            ax.set_xlabel("Condition (unordered axis)")
 
-        ax.axhline(1.0, color='k', lw=0.8, ls=':')   # profili scorrelati
-        ax.set_ylabel("1 - r  (distanza coseno, profili centrati)")
-        ax.set_title(f"Dissimilarita' laminare inter-regionale: {cond} [{res}]",
+        ax.axhline(1.0, color='k', lw=0.8, ls=':')   # uncorrelated profiles
+        ax.set_ylabel("1 - r  (cosine distance, centred profiles)")
+        ax.set_title(f"Inter-regional laminar dissimilarity: {cond} [{res}, {lps.METHOD}]",
                      fontsize=12, fontweight='bold')
         ax.grid(True, axis='y', ls='--', alpha=0.4)
         ax.legend(loc='best', frameon=True)
@@ -520,12 +465,12 @@ for res in ('10bin', '3bin'):
                     f'interregional_distance_{cond}_{res}.png'), dpi=300)
         plt.close(fig)
 
-# --- figura 2: distanza sulla LETTURA NORMALE, a parte ---
-# Quanto differiscono i profili laminari delle ROI durante la lettura di
-# parole normali. E' una domanda diversa da quella della figura 1 -- non
-# riguarda l'effetto della degradazione ma l'organizzazione laminare di
-# base della rete della lettura -- e su una quantita' diversa: qui i
-# profili sono attivazioni (PSC), non differenze.
+# --- figure 2: distance during NORMAL READING, separately ---
+# How much the laminar profiles of the ROIs differ during normal word
+# reading. It is a different question from figure 1 -- it is not about the
+# effect of degradation but about the baseline laminar organisation of the
+# reading network -- and on a different quantity: here the profiles are
+# activations (PSC), not differences.
 for res in ('10bin', '3bin'):
     fig, axes = plt.subplots(1, len(CONDITIONS),
                              figsize=(4.5 * len(CONDITIONS), 4.5),
@@ -545,27 +490,27 @@ for res in ('10bin', '3bin'):
             ax.scatter(i + jit, vals, s=28, color=c, alpha=0.35, zorder=1)
             ax.errorbar(i, m, yerr=se, fmt='o', ms=9, lw=2, capsize=5,
                         color=c, zorder=2)
-        ax.axhline(1.0, color='k', lw=0.8, ls=':')   # profili scorrelati
+        ax.axhline(1.0, color='k', lw=0.8, ls=':')   # uncorrelated profiles
         ax.set_xticks(xs)
         ax.set_xticklabels([f"{a}\nvs {b}" for a, b in PAIRS], fontsize=9)
         ax.set_xlim(-0.5, len(PAIRS) - 0.5)
-        # La ROI dipende dalla condizione anche per read_normal: stesso
-        # contrasto, ma estratto in maschere diverse.
-        ax.set_title(f"ROI di {cond} [{ROI_KEY_FOR[cond]}]", fontsize=10)
+        # The ROI depends on the condition also for read_normal: same
+        # contrast, but extracted in different masks.
+        ax.set_title(f"{cond} ROI [{ROI_KEY_FOR[cond]}]", fontsize=10)
         ax.grid(True, axis='y', ls='--', alpha=0.4)
-    axes[0].set_ylabel("1 - r  (distanza coseno, profili centrati)")
-    fig.suptitle(f"Dissimilarita' laminare inter-regionale durante la "
-                 f"lettura normale [{res}]", fontsize=12, fontweight='bold')
+    axes[0].set_ylabel("1 - r  (cosine distance, centred profiles)")
+    fig.suptitle(f"Inter-regional laminar dissimilarity during "
+                 f"normal reading [{res}, {lps.METHOD}]", fontsize=12, fontweight='bold')
     fig.tight_layout()
     fig.savefig(os.path.join(OUTPUT_DIR,
                 f'interregional_readnormal_{res}.png'), dpi=300)
     plt.close(fig)
 
 # ------------------------------------------------------------------
-# figure sui profili
+# profile figures
 # ------------------------------------------------------------------
 
-# --- profilo della lettura normale ---
+# --- normal reading profile ---
 for cond in CONDITIONS:
     fig, ax = plt.subplots(figsize=(8, 5))
     for region in ROIS:
@@ -581,10 +526,10 @@ for cond in CONDITIONS:
                         edgecolor='none')
     ax.axhline(0, color='k', lw=0.8, ls=':')
     ax.set_xticks(bins)
-    ax.set_xlabel("Bin di layer (1=WM, 10=CSF)")
-    ax.set_ylabel("Percent signal change (%)\nlettura parole normali > riposo")
-    ax.set_title(f"Profilo della lettura normale nella ROI di {cond} "
-                 f"[{ROI_KEY_FOR[cond]}]", fontsize=12, fontweight='bold')
+    ax.set_xlabel("Layer bin (1=WM, 10=CSF)")
+    ax.set_ylabel("Percent signal change (%)\nnormal word reading > rest")
+    ax.set_title(f"Normal reading profile in the {cond} ROI "
+                 f"[{ROI_KEY_FOR[cond]}, {lps.METHOD}]", fontsize=12, fontweight='bold')
     ax.grid(True, ls='--', alpha=0.4)
     ax.legend(loc='best', frameon=True)
     fig.tight_layout()
@@ -592,12 +537,30 @@ for cond in CONDITIONS:
                 f'readnormal_profile_{cond}.png'), dpi=300)
     plt.close(fig)
 
-# --- profili per livello (gia' condizione > lettura normale) ---
+# --- per-level profiles (already condition > normal reading) ---
 for cond in CONDITIONS:
-    fig, axes = plt.subplots(1, len(ROIS), figsize=(5 * len(ROIS), 4.5),
+    fig, axes = plt.subplots(1, len(ROIS), figsize=(5.4 * len(ROIS), 4.8),
                              sharey=True)
     axes = np.atleast_1d(axes)
-    for ax, region in zip(axes, ROIS):
+ 
+    # shared limits for the secondary axis, so the panels stay comparable
+    # on the baseline too
+    base_lim = None
+    if SHOW_BASELINE and BASELINE_SECONDARY_AXIS:
+        all_vals = []
+        for region in ROIS:
+            b = results[(cond, region)]['read_normal']
+            if b:
+                mb, seb = mean_se(np.array(b))
+                all_vals.append(mb - seb)
+                all_vals.append(mb + seb)
+        if all_vals:
+            all_vals = np.concatenate(all_vals)
+            margin = 0.05 * (np.nanmax(all_vals) - np.nanmin(all_vals) or 1.0)
+            base_lim = (np.nanmin(all_vals) - margin, np.nanmax(all_vals) + margin)
+ 
+    base_handle = None
+    for k, (ax, region) in enumerate(zip(axes, ROIS)):
         r = results[(cond, region)]
         if not r['levels']:
             continue
@@ -608,27 +571,56 @@ for cond in CONDITIONS:
             m, se = mean_se(arr[:, li])
             ax.plot(bins, m, marker='o', lw=2, color=c,
                     alpha=0.40 + 0.60 * li / 2,
-                    label=f"livello {LEVEL_VALUES[li]}")
+                    label=f"level {LEVEL_VALUES[li]}")
             ax.fill_between(bins, m - se, m + se, color=c, alpha=0.12,
                             edgecolor='none')
+ 
+        if SHOW_BASELINE and r['read_normal']:
+            base = np.array(r['read_normal'])
+            mb, seb = mean_se(base)
+            ax_b = ax.twinx() if BASELINE_SECONDARY_AXIS else ax
+            line_obj, = ax_b.plot(bins, mb, marker='s', ms=4, lw=2, ls='--',
+                               color='k', zorder=5,
+                               label='normal reading > rest')
+            ax_b.fill_between(bins, mb - seb, mb + seb, color='k',
+                              alpha=0.10, edgecolor='none', zorder=4)
+            base_handle = line_obj
+            if BASELINE_SECONDARY_AXIS:
+                if base_lim is not None:
+                    ax_b.set_ylim(base_lim)
+                # right-axis label only on the last panel
+                if k == len(ROIS) - 1:
+                    ax_b.set_ylabel("PSC (%) - normal reading > rest",
+                                    fontsize=10)
+                else:
+                    ax_b.set_yticklabels([])
+ 
         ax.axhline(0, color='k', lw=0.8, ls=':')
         ax.set_title(f"{region} (N={n})")
-        ax.set_xlabel("Bin di layer (1=WM, 10=CSF)")
+        ax.set_xlabel("Layer bin (1=WM, 10=CSF)")
         ax.set_xticks(bins)
         ax.grid(True, ls='--', alpha=0.4)
+ 
     axes[0].set_ylabel(f"$\\Delta$ percent signal change (%)\n"
-                       f"{cond} > lettura normale")
-    axes[-1].legend(loc='best', frameon=True)
-    fig.suptitle(f"Profilo laminare per livello di {cond}",
+                       f"{cond} > normal reading")
+ 
+    h, l = axes[-1].get_legend_handles_labels()
+    if base_handle is not None:
+        h = list(h) + [base_handle]
+        l = list(l) + ['normal reading > rest'
+                       + (' (right axis)' if BASELINE_SECONDARY_AXIS else '')]
+    axes[-1].legend(h, l, loc='best', frameon=True, fontsize=8)
+ 
+    fig.suptitle(f"Laminar profile per level of {cond} [{lps.METHOD}]",
                  fontsize=12, fontweight='bold')
     fig.tight_layout()
     fig.savefig(os.path.join(OUTPUT_DIR, f'profiles_{cond}.png'), dpi=300)
     plt.close(fig)
 
-# --- profilo della modulazione parametrica (solo famiglie ordinali) ---
+# --- parametric modulation profile (families in PARAMETRIC_FAMILIES only) ---
 for cond in CONDITIONS:
     if cond not in PARAMETRIC_FAMILIES:
-        print(f"[skip] figura parametrica per {cond}: livelli non ordinati")
+        print(f"[skip] parametric figure for {cond}: unordered levels")
         continue
     fig, ax = plt.subplots(figsize=(8, 5))
     for region in ROIS:
@@ -642,13 +634,13 @@ for cond in CONDITIONS:
         ax.plot(bins, m, marker='o', lw=2.5, color=c, label=f"{region} (N={n})")
         ax.fill_between(bins, m - se, m + se, color=c, alpha=0.20,
                         edgecolor='none')
-        for s in arr:                   # con N=8 i singoli contano
+        for s in arr:                   # with N=8 individual subjects matter
             ax.plot(bins, s, color=c, alpha=0.20, lw=0.8, zorder=0)
     ax.axhline(0, color='k', lw=0.8, ls=':')
     ax.set_xticks(bins)
-    ax.set_xlabel("Bin di layer (1=WM, 10=CSF)")
-    ax.set_ylabel("Pendenza parametrica ($\\Delta$ PSC % per livello)")
-    ax.set_title(f"Modulazione parametrica: {cond}",
+    ax.set_xlabel("Layer bin (1=WM, 10=CSF)")
+    ax.set_ylabel("Parametric slope ($\\Delta$ PSC % per level)")
+    ax.set_title(f"Parametric modulation: {cond} [{lps.METHOD}]",
                  fontsize=12, fontweight='bold')
     ax.grid(True, ls='--', alpha=0.4)
     ax.legend(loc='best', frameon=True)
@@ -657,5 +649,5 @@ for cond in CONDITIONS:
                 f'parametric_slope_{cond}.png'), dpi=300)
     plt.close(fig)
 
-print(f"\nModalita' denominatore: {glp.DENOMINATOR_MODE}")
+print(f"\nMetric: {lps.METHOD}")
 print(f"Output in: {OUTPUT_DIR}")

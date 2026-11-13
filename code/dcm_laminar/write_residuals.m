@@ -10,8 +10,7 @@
 %
 
 cfg.root      = '/mnt/store1/projects/progetto_layer/data/derivatives/hires_pipeline';                        
-cfg.subjects  = {'sub-001','sub-002','sub-003','sub-004', ...
-                 'sub-005','sub-006','sub-007','sub-008'};
+cfg.subjects  = {'sub-008'};
 cfg.spm_first = @(sub) fullfile(cfg.root, sub, 'stats-masked', 'SPM.mat'); 
 
 spm('defaults','fmri');

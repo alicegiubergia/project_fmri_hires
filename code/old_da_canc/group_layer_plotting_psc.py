@@ -10,6 +10,14 @@ Modifiche rispetto alla versione precedente:
   4. Controllo automatico dei pesi di contrasto (vedi check_contrast_weights).
   5. Fix del binning: i voxel con metrica == 1.0 non vengono piu' scartati.
   6. Diagnostica: conteggio voxel per bin, e profilo opzionale della ResMS.
+  7. METHOD (equidist/equivol) si sceglie solo qui, anche via variabile
+     d'ambiente LAYER_METHOD; gli output di ogni script vanno in una
+     sottocartella <METHOD>. Il PSC e' sempre normalizzato voxel per voxel.
+
+Questo script fa solo figure di controllo e non salva profili: l'unico file di
+profili e' quello scritto da export_profiles.py, che gli script di analisi
+(layer_ff_fb_analysis.py, group_layer_fitting_psc.py, modelli_laminari.r)
+leggono.
 
 I punti marcati [PLACEHOLDER] vanno verificati o compilati: sono valori che
 non ho ricavato dai tuoi dati.
@@ -30,7 +38,9 @@ from scipy.io import loadmat
 # ----------------------------------------------------------------------------
 
 ROOT_DIR = '/mnt/store1/projects/progetto_layer/data/derivatives'
-OUTPUT_DIR = os.path.join(ROOT_DIR, 'group_layer_plotting_psc')
+# Le mappe PSC in cache NON dipendono dalla metrica di profondita' (la metrica
+# entra solo al campionamento), quindi psc_maps/ e' condivisa tra equidist ed
+# equivol.
 PSC_DIR = os.path.join(ROOT_DIR, 'psc_maps')
 
 # Cartella first-level per soggetto: contiene i con_00XX e i beta_00XX.
@@ -75,18 +85,26 @@ NR_LAYERS = 10
 # non un valore derivato dai tuoi dati. Controlla l'istogramma di beta_costante.
 MIN_SESSION_MEAN = 1.0
 
-# Come normalizzare il PSC.
-#   'voxelwise'  -> divide per il beta costante di OGNI voxel. Rimuove le
-#                   disomogeneita' locali di ricezione, ma inietta nei profili
-#                   il profilo di profondita' del segnale di base (vedi
-#                   diagnostic_psc_denominator.png).
-#   'roi_scalar' -> divide per la media del beta costante su tutta la GM della
-#                   ROI: un solo numero. Rimuove le differenze di guadagno tra
-#                   soggetti e tra ROI senza toccare la FORMA del profilo.
-# Per un'analisi laminare, dove la forma e' la variabile dipendente,
-# 'roi_scalar' e' piu' conservativo. Le cache sono separate, quindi si possono
-# girare entrambe le modalita' senza ricalcolare tutto.
-DENOMINATOR_MODE = 'voxelwise'
+# Il PSC e' normalizzato voxel per voxel: si divide per il beta costante di
+# OGNI voxel. Rimuove le disomogeneita' locali di ricezione, ma porta nei
+# profili l'eventuale andamento in profondita' del segnale di base: controllalo
+# in diagnostic_psc_denominator.png.
+#
+# METHOD e' l'UNICO punto in cui si sceglie la metrica di profondita': tutti
+# gli altri script la leggono da qui (glp.METHOD, glp.OUT_TAG). Si puo'
+# cambiare senza toccare il codice, da riga di comando:
+#     LAYER_METHOD=equivol python export_profiles.py
+METHOD = os.environ.get('LAYER_METHOD', 'equidist')
+
+_VALID_METHODS = ('equidist', 'equivol')
+if METHOD not in _VALID_METHODS:
+    raise ValueError(f"LAYER_METHOD={METHOD!r}: valori ammessi {_VALID_METHODS}")
+
+# Ogni script scrive i propri output in una sottocartella con questo nome,
+# cosi' equidist ed equivol non si sovrascrivono mai a vicenda.
+OUT_TAG = METHOD
+
+OUTPUT_DIR = os.path.join(ROOT_DIR, 'group_layer_plotting_psc', OUT_TAG)
 
 PLOT_VOXEL_COUNTS = True     # pannello diagnostico con i voxel per bin
 PLOT_BASELINE = True         # profilo laminare del denominatore del PSC
@@ -307,13 +325,8 @@ def make_psc_map(spm_dir, con_number, SF, norm_factor, iB, out_path):
     con_img = nib.load(con_path)
     con = con_img.get_fdata()
 
-    if DENOMINATOR_MODE == 'roi_scalar':
-        # Solo il numeratore: la divisione avviene al campionamento, con uno
-        # scalare calcolato sulla GM della ROI.
-        psc = 100.0 * SF * (con / norm_factor)
-    else:
-        session_mean, _ = load_session_mean(spm_dir, iB)
-        psc = 100.0 * SF * (con / norm_factor) / session_mean
+    session_mean, _ = load_session_mean(spm_dir, iB)
+    psc = 100.0 * SF * (con / norm_factor) / session_mean
 
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
     nib.save(nib.Nifti1Image(psc.astype(np.float32),
@@ -373,55 +386,17 @@ def sample_map(map_path, metric_path, roi_path, nr_layers=NR_LAYERS):
     return profile, counts
 
 
-_SCALAR_CACHE = {}
-
-
-def roi_scalar_denominator(sub, roi_path, reference):
-    """Media del beta costante sulla GM della ROI: un solo numero.
-
-    E' il denominatore usato in modalita' 'roi_scalar'. Riusa la mappa del
-    session mean gia' upsamplata per la diagnostica, quindi non ricalcola nulla.
-    """
-    key = (sub, roi_path)
-    if key in _SCALAR_CACHE:
-        return _SCALAR_CACHE[key]
-
-    b_path = get_subject_baseline_upsampled(sub, reference)
-    mask = (nib.load(roi_path).get_fdata() == 3)
-    vals = nib.load(b_path).get_fdata()[mask]
-    vals = vals[np.isfinite(vals)]
-    s = float(np.mean(vals)) if vals.size else np.nan
-
-    _SCALAR_CACHE[key] = s
-    return s
-
-
 def sample_psc_profile(sub, contrast, metric_path, roi_path, reference):
-    """Profilo laminare in PSC, secondo DENOMINATOR_MODE.
-
-    Restituisce (profilo, conteggi). In 'voxelwise' la mappa e' gia' PSC; in
-    'roi_scalar' la mappa e' il solo numeratore e la divisione avviene qui.
-    """
+    """Profilo laminare in PSC (mappa PSC voxelwise). Restituisce (profilo, conteggi)."""
     map_path = get_subject_psc_upsampled(sub, contrast, reference)
-    prof, counts = sample_map(map_path, metric_path, roi_path)
-    if prof is None:
-        return None, None
-
-    if DENOMINATOR_MODE == 'roi_scalar':
-        s = roi_scalar_denominator(sub, roi_path, reference)
-        if not np.isfinite(s) or s <= 0:
-            print(f"    [SKIP] {sub}: denominatore di ROI non valido ({s})")
-            return None, None
-        prof = prof / s
-
-    return prof, counts
+    return sample_map(map_path, metric_path, roi_path)
 
 
 def subject_paths(sub, contrast, region):
     """Path di metrica e ROI (invariati: usano la chiave spmT)."""
     task_key = TASK[MAPPING[contrast]]
     metric = (f'{ROOT_DIR}/layer_fmri/{sub}/'
-              f'{sub}_con-{task_key}_label-{region}_metric_equidist.nii')
+              f'{sub}_con-{task_key}_label-{region}_metric_{METHOD}.nii')
     roi = (f'{ROOT_DIR}/rois/{sub}/'
            f'{sub}_con-{task_key}_desc-polishCleaned_label-{region}'
            f'_res-up_dseg.nii.gz')
@@ -507,8 +482,7 @@ def plot_baseline_profiles(design):
     Riga 1: forma normalizzata (profilo diviso per la sua media sui bin),
     perche' l'intensita' assoluta varia tra soggetti per guadagno di ricezione.
     Se la curva e' piatta, dividere per il denominatore e' un riscalamento e
-    non tocca la forma dei profili PSC. Se non lo e', la tocca, e la modalita'
-    'roi_scalar' evita il problema.
+    non tocca la forma dei profili PSC. Se non lo e', la tocca.
     Riga 2: valori grezzi.
     """
     print(f"\n{'=' * 50}\n Diagnostica: denominatore del PSC\n{'=' * 50}")
@@ -584,7 +558,7 @@ def plot_baseline_profiles(design):
                           fontsize=11)
     axes[1, 0].set_ylabel("Beta costante (unita' arbitrarie)", fontsize=11)
     fig.suptitle("Forma del denominatore del PSC lungo la profondita', "
-                 "per set di ROI\npiatto = la normalizzazione non altera la "
+                 f"per set di ROI (metrica: {METHOD})\npiatto = la normalizzazione non altera la "
                  "forma dei profili", fontsize=13, fontweight='bold')
     fig.tight_layout()
     save_path = os.path.join(OUTPUT_DIR, "diagnostic_psc_denominator.png")
@@ -606,7 +580,7 @@ def get_subject_psc_upsampled(sub, contrast, reference):
     con_number = int(contrast.split('_')[1])
     spm_dir = SPM_DIR_PATTERN.format(sub=sub)
 
-    tag = 'psc' if DENOMINATOR_MODE == 'voxelwise' else 'pscnum'
+    tag = 'psc'
     up_path = os.path.join(PSC_DIR, sub,
                            f'{sub}_desc-{contrast}_{tag}_res-up.nii.gz')
     if os.path.exists(up_path):
@@ -673,7 +647,7 @@ def main():
 
     with open(os.path.join(OUTPUT_DIR, 'design_summary.json'), 'w') as f:
         json.dump({'reference_subject': REFERENCE_SUBJECT,
-                   'denominator_mode': DENOMINATOR_MODE,
+                   'method': METHOD,
                    'condition_sf': design['cond_sf'],
                    'contrast_sf': {str(k): v for k, v in design['sf'].items()},
                    'norm_factors': {str(k): v
@@ -759,7 +733,7 @@ def main():
         ax.set_ylabel(ylab, fontsize=11)
         ax.set_title(f"Group mean layer profile ($\\pm$ SE)\n"
                      f"{contrast} ({MAPPING[contrast]}) - {subtitle}\n"
-                     f"denominatore: {DENOMINATOR_MODE}",
+                     f"metrica: {METHOD}",
                      fontsize=12, fontweight='bold')
         ax.grid(True, linestyle='--', alpha=0.4)
         ax.legend(loc="best", frameon=True)
@@ -777,7 +751,7 @@ def main():
         fig.tight_layout()
         save_path = os.path.join(
             OUTPUT_DIR,
-            f"group_psc_{contrast}_{MAPPING[contrast]}_{DENOMINATOR_MODE}.png")
+            f"group_psc_{contrast}_{MAPPING[contrast]}_{OUT_TAG}.png")
         fig.savefig(save_path, dpi=300)
         plt.close(fig)
         print(f" -> salvato: {save_path}")

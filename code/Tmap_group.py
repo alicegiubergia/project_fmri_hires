@@ -1,3 +1,8 @@
+"""
+LEGACY - analisi su mappe t (spmT) sogliate a p<0.001: profili di gruppo.
+Sostituita dalla pipeline in PSC (laminar_psc.py + script 01-05); tenuta per le
+slide iniziali. Metrica: LAYER_METHOD=equidist (default) o equivol.
+"""
 import os
 import glob
 import numpy as np
@@ -27,6 +32,9 @@ MAPPING = {
 
 UPSAMP_SPACING = (0.2, 0.2, 0.2) 
 NR_LAYERS = 10
+# Metrica di profondita' LayNii: 'equidist' o 'equivol' (anche via LAYER_METHOD)
+METHOD = os.environ.get('LAYER_METHOD', 'equidist')
+assert METHOD in ('equidist', 'equivol'), METHOD
 
 COLOR_ROI = {
     'visual': '#0f9d58',   # Verde
@@ -46,7 +54,7 @@ def extract_subject_profile(sub, contrast, region):
     """Estrae il profilo di attivazione per layer di un singolo soggetto."""
     task_key = TASK[MAPPING[contrast]]
     
-    nii_metric_path = f'{ROOT_DIR}/layer_fmri/{sub}/{sub}_con-{task_key}_label-{region}_metric_equidist.nii'
+    nii_metric_path = f'{ROOT_DIR}/layer_fmri/{sub}/{sub}_con-{task_key}_label-{region}_metric_{METHOD}.nii'
     nii_roi_path = f'{ROOT_DIR}/rois/{sub}/{sub}_con-{task_key}_desc-polishCleaned_label-{region}_res-up_dseg.nii.gz'
     
     activation_files = glob.glob(f'{ROOT_DIR}/roi_statistics-masked/{sub}/func/{sub}_desc-{contrast}thresh001_statmap.nii.gz')
@@ -159,7 +167,7 @@ for contrast in MAPPING.keys():
 
     # Definizione e salvataggio del Grafico Finale di Gruppo
     if has_plot_data:
-        TITLE_LINE = f"Group mean layer profile (± SE)\nContrast: {contrast} ({MAPPING[contrast]})"
+        TITLE_LINE = f"Group mean layer profile (± SE)\nContrast: {contrast} ({MAPPING[contrast]}) [{METHOD}]"
         plt.xlim((1, NR_LAYERS))
         plt.xticks(np.arange(1, NR_LAYERS + 1, 1))
         plt.xlabel("Geometric layer bins (1=WM, 10=CSF)", fontsize=11)
@@ -168,7 +176,7 @@ for contrast in MAPPING.keys():
         plt.grid(True, linestyle='--', alpha=0.4)
         plt.legend(loc="best", frameon=True)
         
-        save_path = os.path.join(OUTPUT_DIR, f"group_line_{contrast}_{MAPPING[contrast]}.png")
+        save_path = os.path.join(OUTPUT_DIR, f"group_line_{contrast}_{MAPPING[contrast]}_{METHOD}.png")
         plt.tight_layout()
         plt.savefig(save_path, dpi=300)
         plt.show()

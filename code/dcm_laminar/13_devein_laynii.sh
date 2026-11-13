@@ -35,11 +35,16 @@ set -euo pipefail
 export FSLOUTPUTTYPE=NIFTI_GZ          # output FSL compressi (li legge SPM direttamente)
 
 # --------------------------- CONFIGURAZIONE ----------------------------------
-ROOT="/mnt/store1/projects/progetto_layer/data/derivatives"                 
-SUBJECTS=(sub-008)
+ROOT="/mnt/store1/projects/progetto_layer/data/derivatives"  
+SUBJECTS=(sub-002)               
 RUNS=(1 2 3)
-TASK="mirroring"                               # mirroring | spacing — set di ROI (uno per tutti i modelli)
-declare -A CON_OF=( [mirroring]="spmT_0008" [spacing]="spmT_0009" )
+TASK="baseline"                                # mirroring | spacing — set di ROI (uno per tutti i modelli)
+# Numero di colonne LN2_COLUMNS: letto per soggetto x set di ROI x ROI dalla
+# tabella di n_columns.py (colonna n_columns). Per forzare un numero fisso per
+# tutte le ROI, scrivi un intero in N_COLUMNS_FIXED (vuoto = usa la tabella).
+COL_DIAM="2"                                   # diametro (mm) con cui è stata generata la tabella: n_columns.py area --diam <COL_DIAM>
+N_COLUMNS_FIXED=""
+declare -A CON_OF=( [mirroring]="spmT_0008" [spacing]="spmT_0009" [baseline]="spmT_0001")
 [[ -n "${CON_OF[${TASK}]+x}" ]] || { echo "TASK sconosciuto: ${TASK} (usa: ${!CON_OF[*]})"; exit 1; }
 CON="${CON_OF[${TASK}]}"
 LAYERING="equidist"                            # equidist | equivol — usa lo stesso delle altre analisi e della definizione dei bin nel DCM
@@ -60,7 +65,21 @@ midgm_f()    { lay "$1" "$2" midGM_${LAYERING}; }    # output LN2_LAYERS
 rim_f()      { echo "${ROOT}/rois/$1/$1_con-${CON}_desc-polishCleaned_label-$2_res-up_dseg.nii.gz"; } 
 func_run()   { local r; r=$(printf "%02d" "$((10#$2))"); echo "${ROOT}/hires_pipeline/$1/func/$1_task-reading_run-${r}_space-anat_desc-preproc_bold.nii"; }  # 4D preprocessato, griglia NATIVA (quello entrato nel GLM)
 alf_source() { echo "${ROOT}/hires_pipeline/$1/stats-masked/$1_residuals_4d.nii.gz"; }      # output di 00_write_residuals.m = <cartella dello SPM.mat>/<sub>_residuals_4d.nii
+COLS_TSV="${ROOT}/rois/n_columns_d${COL_DIAM}mm_${LAYERING}.tsv"                      # output di: python n_columns.py area --diam ${COL_DIAM}
+# etichetta nel nome del deveinato: N fisso -> desc-<N>col, N dalla tabella -> desc-d<COL_DIAM>mm
+if [[ -n "${N_COLUMNS_FIXED}" ]]; then COL_TAG="${N_COLUMNS_FIXED}col"; else COL_TAG="d${COL_DIAM}mm"; fi
 # -----------------------------------------------------------------------------
+
+# n_cols <sub> <set di ROI> <roi> -> numero di colonne (dalla tabella, o N_COLUMNS_FIXED)
+n_cols() {
+  if [[ -n "${N_COLUMNS_FIXED}" ]]; then echo "${N_COLUMNS_FIXED}"; return; fi
+  local n
+  n=$(awk -F'\t' -v s="$1" -v t="$2" -v r="$3" \
+        'NR==1 { for (i = 1; i <= NF; i++) c[$i] = i; next }
+         $c["subject"] == s && $c["roi_set"] == t && $c["roi"] == r { print $c["n_columns"]; exit }' \
+        "${COLS_TSV}")
+  [[ "${n}" =~ ^[1-9][0-9]*$ ]] || { echo "!! numero di colonne non trovato o non valido per $1 $2 $3 in ${COLS_TSV}: '${n}'" >&2; return 1; }
+  echo "${n}"; }
 
 # sposta l'output di LayNii (che aggiunge suffissi al nome) sul nome atteso
 grab() { local pat="$1" dst="$2" f; f=$(ls ${pat} 2>/dev/null | head -n1)
@@ -77,6 +96,11 @@ bbox() {  # bbox <file metric> -> "xmin xsize ymin ysize zmin zsize" della ROI (
   local w; w=($(fslstats "${tmp}.nii.gz" -w)); rm -f "${tmp}.nii.gz"
   echo "${w[0]} ${w[1]} ${w[2]} ${w[3]} ${w[4]} ${w[5]}"; }
 
+if [[ -z "${N_COLUMNS_FIXED}" && ! -f "${COLS_TSV}" ]]; then
+  echo "Tabella delle colonne non trovata: ${COLS_TSV}"
+  echo "Generala con: python n_columns.py area --diam ${COL_DIAM}  (oppure imposta N_COLUMNS_FIXED)"; exit 1
+fi
+
 for SUB in "${SUBJECTS[@]}"; do
   echo "=== ${SUB} (${TASK} = ${CON}) ==="
   OUT="${ROOT}/roi-deveined/${SUB}/${TASK}"
@@ -86,19 +110,30 @@ for SUB in "${SUBJECTS[@]}"; do
   declare -A PREFIX=( [dorsal]=Dors [ventral]=Ven [visual]=Vis )
   for ROI in visual ventral dorsal; do
     P="${PREFIX[${ROI}]}"
-    echo "  -- ${ROI} (${P})"
-    BOX=$(bbox "$(metric_f "${SUB}" ${ROI})" "${OUT}")
+    N_COLUMNS=$(n_cols "${SUB}" "${TASK}" "${ROI}")      # diverso per ogni ROI
 
-    fslroi "$(metric_f "${SUB}" ${ROI})" "${OUT}/${P}_metric" ${BOX}
-    fslroi "$(layers_f "${SUB}" ${ROI})" "${OUT}/${P}_layers" ${BOX}
-    fslroi "$(midgm_f  "${SUB}" ${ROI})" "${OUT}/${P}_midgm"  ${BOX}
-    fslroi "$(rim_f    "${SUB}" ${ROI})" "${OUT}/${P}_rim"    ${BOX}
+    # 1. crop
+    # solo se manca almeno uno dei quattro file; in quel caso si rifanno
+    # tutti e quattro, così restano sempre sullo stesso box
+    CROP_OK=1
+    for F in metric layers midgm rim; do
+      [[ -f "${OUT}/${P}_${F}.nii.gz" ]] || CROP_OK=0
+    done
+    if (( CROP_OK )); then
+      echo "     crop già presente, salto"
+    else
+      BOX=$(bbox "$(metric_f "${SUB}" ${ROI})" "${OUT}")
+      fslroi "$(metric_f "${SUB}" ${ROI})" "${OUT}/${P}_metric" ${BOX}
+      fslroi "$(layers_f "${SUB}" ${ROI})" "${OUT}/${P}_layers" ${BOX}
+      fslroi "$(midgm_f  "${SUB}" ${ROI})" "${OUT}/${P}_midgm"  ${BOX}
+      fslroi "$(rim_f    "${SUB}" ${ROI})" "${OUT}/${P}_rim"    ${BOX}
+    fi
 
     # 2. colonne
-    if [[ ! -f "${OUT}/${P}_columns.nii" ]]; then
+    if [[ ! -f "${OUT}/${P}_columns${N_COLUMNS}.nii" ]]; then
       LN2_COLUMNS -rim "${OUT}/${P}_rim.nii.gz" -midgm "${OUT}/${P}_midgm.nii.gz" \
-                  -output "${OUT}/${P}_cols.nii.gz"
-      grab "${OUT}/${P}_cols_columns*.nii.gz" "${OUT}/${P}_columns.nii" # gunzip for SPM
+                  -nr_columns ${N_COLUMNS} -output "${OUT}/${P}_cols.nii.gz"
+      grab "${OUT}/${P}_cols_columns${N_COLUMNS}.nii.gz" "${OUT}/${P}_columns${N_COLUMNS}.nii" # gunzip for SPM
       rm -f "${OUT}/${P}"_cols*centroids*.nii*
     fi
 
@@ -120,20 +155,22 @@ for SUB in "${SUBJECTS[@]}"; do
     for RUN in "${RUNS[@]}"; do
       echo "     run ${RUN}"
       # 4. ricampionamento sul crop della ROI + PSC
+      # (il PSC non dipende dalle colonne: si calcola una volta sola)
+      if [[ ! -f "${OUT}/${P}_run-$(printf '%02d' "$RUN")_psc.nii" ]]; then
       to_layer_grid "$(func_run "${SUB}" "${RUN}")" "${OUT}/${P}_metric.nii.gz" "${OUT}/tmp_run.nii.gz"
       python3 "${SCRIPT_DIR}/psc_alf.py" psc "${OUT}/tmp_run.nii.gz" "${OUT}/${P}_run-$(printf '%02d' "$RUN")_psc.nii" \
               --mask "${OUT}/${P}_layers.nii.gz"
       rm -f "${OUT}/tmp_run.nii.gz"
+      fi
 
       # 5. deveining
       LN2_DEVEIN -input "${OUT}/${P}_run-$(printf '%02d' "$RUN")_psc.nii" \
                  -layer_file "${OUT}/${P}_layers.nii.gz" \
-                 -column_file "${OUT}/${P}_columns.nii" \
+                 -column_file "${OUT}/${P}_columns${N_COLUMNS}.nii" \
                  -ALF "${OUT}/${P}_alf.nii.gz" \
                  -lambda "${LAMBDA}" \
-                 -output "${OUT}/${P}_run-$(printf '%02d' "$RUN")_devtmp.nii"
-      grab "${OUT}/${P}_run-$(printf '%02d' "$RUN")_devtmp*deveinDeconv*.nii*" "${OUT}/${P}_run-$(printf '%02d' "$RUN")_devein.nii"
-      rm -f "${OUT}/${P}_run-$(printf '%02d' "$RUN")_devtmp.nii"
+                 -output "${OUT}/${P}_run-$(printf '%02d' "$RUN")_columns${N_COLUMNS}"
+      grab "${OUT}/${P}_run-$(printf '%02d' "$RUN")_columns${N_COLUMNS}_deveinDeconv*.nii*" "${OUT}/${P}_run-$(printf '%02d' "$RUN")_desc-${COL_TAG}_devein.nii"
     done
   done
 

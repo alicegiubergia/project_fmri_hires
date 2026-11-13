@@ -2,26 +2,37 @@
 # ============================================================
 # Modelli laminari di gruppo con residui AR(1) lungo la profondità
 #
-# Uso:  Rscript modelli_laminari_ar1.R <OUT_DIR>/profili_long_<DENOMINATOR_MODE>.csv
-# Input: CSV esportato da esporta_profili.py
-#        colonne: subject, region, family, roi_key, condition, contrast, level, bin, psc, n_voxel, x
+# Uso:  Rscript modelli_laminari.r <ROOT>/group_layer_modelli/<METHOD>/profili_<METHOD>.csv
+# Input: CSV esportato da export_profiles.py (unica sorgente dei profili)
+#        colonne: subject, region, family, roi_key, condition, contrast, level, bin, psc, n_voxel, x,
+#                 method
 #        condition = "livello" (level 1..3) oppure "baseline" (con_0001, level 0)
+# Output: nella stessa cartella del CSV, con suffisso _<METHOD>
 # Pacchetti: solo nlme (incluso nella distribuzione standard di R)
 # ============================================================
 
 suppressPackageStartupMessages(library(nlme))
 
 args <- commandArgs(trailingOnly = TRUE)
-if (length(args) < 1) stop("Uso: Rscript modelli_laminari_ar1.R <profili_long_<mode>.csv>")
+if (length(args) < 1) stop("Uso: Rscript modelli_laminari.r <profili_<method>.csv>")
 CSV     <- args[1]
 OUT_DIR <- dirname(CSV)
-# suffisso degli output = modalita' del denominatore, cosi' voxelwise e roi_scalar non si sovrascrivono
-TAG     <- sub("^profili_long_?", "", sub("\\.csv$", "", basename(CSV)))
+# suffisso degli output = <METHOD>, preso dal nome del CSV:
+# equidist ed equivol non si sovrascrivono
+TAG     <- sub("^profili_?", "", sub("\\.csv$", "", basename(CSV)))
 SUFFIX  <- if (nzchar(TAG)) paste0("_", TAG) else ""
 out_path <- function(stem, ext) file.path(OUT_DIR, paste0(stem, SUFFIX, ".", ext))
 NR_BIN  <- 10
 
 df <- read.csv(CSV, stringsAsFactors = FALSE)
+# Il CSV deve contenere una sola configurazione, coerente con il nome del file
+for (col in c("method")) {
+  if (!col %in% names(df)) stop("Colonna '", col, "' mancante: CSV di una versione precedente? Rigeneralo con export_profiles.py")
+  if (length(unique(df[[col]])) != 1) stop("Piu' valori di '", col, "' nello stesso CSV: ", paste(unique(df[[col]]), collapse = ", "))
+}
+CONFIG <- df$method[1]
+if (nzchar(TAG) && TAG != CONFIG) stop("Il nome del file (", TAG, ") non corrisponde al contenuto (", CONFIG, ")")
+cat("Configurazione:", CONFIG, "\n")
 df <- df[!is.na(df$psc), ]
 df$subject <- factor(df$subject)
 df$bin     <- as.integer(df$bin)
@@ -250,7 +261,7 @@ figura_residui <- function(res, colonna, titolo, nomefile) {
     lines(as.integer(names(medie)), medie, col = "#d1495b", lwd = 2, type = "o", pch = 16)
     abline(h = 0)
   }
-  mtext(titolo, outer = TRUE, font = 2)
+  mtext(paste0(titolo, "  [", CONFIG, "]"), outer = TRUE, font = 2)
   invisible(dev.off())
 }
 
@@ -269,7 +280,7 @@ figura_pendenze <- function(pend, nomefile) {
     arrows(g$bin, g$ci_low, g$bin, g$ci_high, angle = 90, code = 3, length = 0.03)
     abline(h = 0, lty = 2)
   }
-  mtext("Domanda 2: effetto del livello per bin (LMM, AR1)", outer = TRUE, font = 2)
+  mtext(paste0("Domanda 2: effetto del livello per bin (LMM, AR1)  [", CONFIG, "]"), outer = TRUE, font = 2)
   invisible(dev.off())
 }
 
